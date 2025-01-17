@@ -6,10 +6,6 @@ import json
 
 order_bp = Blueprint("order", __name__)
 
-
-
-
-
 @order_bp.route("/order", methods=["GET"])
 def get_order():
     try:
