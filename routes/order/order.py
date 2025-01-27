@@ -74,3 +74,30 @@ def get_order():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"message": "Internal server error."}), 500
+
+@order_bp.route("/orderApprove", methods=["POST"])
+def approve_order():
+    try:
+        soid = request.args.get("soid")
+        user_id = request.args.get("user_id")
+        if not (soid and soid.isdigit() and user_id and user_id.isdigit()):
+            return jsonify({"message": "Missing or invalid query parameters."}), 400
+
+        params = (soid, user_id)
+        # Define SQL query with parameterized values (if applicable)
+        query = "uSP_ApproveSalesOrderDetails_ManualPost @SOID=?,@userId=?"
+        # Execute the query
+        result = ms_query_db(query, args=params, commit=False, fetch_one=True)
+
+        print(f"Query Result: {result}")
+
+        # Check and return appropriate response
+        if result:
+
+            return jsonify(result), 200
+        else:
+            return jsonify({"message": "No data found."}), 404
+
+
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
