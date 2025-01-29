@@ -101,3 +101,39 @@ def approve_order():
 
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+
+@order_bp.route("/openOrder/<customer_code>", methods=["GET"])
+def open_order(customer_code):
+    try:
+        query = """
+                    SELECT
+                    ISNULL(SUM(CAST (DocTotal AS NUMERIC(18,2))),0) AS Amount 
+                    FROM SAP_SalesOrder_M_Tbl S
+                    INNER JOIN TBL_SalesOrderStatus A on S.SalesOrderStatus=A.Name
+                    WHERE A.SlNo not in (2,1003,1004,1005,1006,1009)  AND CustomerCode=?
+                """
+        query2 = """
+                    SELECT 
+                    SUM(NetAmount) AS Amount 
+
+                    FROM TBL_SalesOrderDetails 
+                    WHERE Status='N' AND CustCode=?
+                """
+        params = (customer_code,)
+        open_order = ms_query_db(query, params, fetch_one=True)
+        draft_order = ms_query_db(query2, params, fetch_one=True)
+
+        response = {
+            "open_order": float(open_order["Amount"])
+            if open_order and open_order["Amount"] is not None
+            else None,
+            "draft_order": float(draft_order["Amount"])
+            if draft_order and draft_order["Amount"] is not None
+            else None,
+        }
+        return jsonify(response), 200
+
+    except Exception as e:  
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
