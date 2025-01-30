@@ -1,6 +1,5 @@
 from setting.db_connections import ms_query_db
 from flask import Blueprint, request, jsonify
-
 import json
 # from datetime import datetime
 
@@ -120,9 +119,12 @@ def open_order(customer_code):
                     FROM TBL_SalesOrderDetails 
                     WHERE Status='N' AND CustCode=?
                 """
+        query3 = "select CardName, Territory from CustomerMaster_M_Tbl where CardCode = ?"
+        
         params = (customer_code,)
         open_order = ms_query_db(query, params, fetch_one=True)
         draft_order = ms_query_db(query2, params, fetch_one=True)
+        customer = ms_query_db(query3, params, fetch_one=True)
 
         response = {
             "open_order": float(open_order["Amount"])
@@ -131,9 +133,12 @@ def open_order(customer_code):
             "draft_order": float(draft_order["Amount"])
             if draft_order and draft_order["Amount"] is not None
             else None,
+            "customer": customer["CardName"],
+            "territory": customer["Territory"],
         }
         return jsonify(response), 200
 
     except Exception as e:  
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
     
+
