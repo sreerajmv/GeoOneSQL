@@ -42,12 +42,19 @@ def get_itemgroup():
                     "AMNS PPGI Cladding Sheet",
                     "Posco PPGL Cladding Sheet",
                     "PPGI Roofing Sheet",
+                    "Tuffdek",
                 ]
             )
         elif group == "rm":
             conditions.append("SubGroup IN (?, ?, ?, ?)")
             params.extend(
-                ["Georoof Baby Coil", "Georoof Coil", "AMNS Coil", "AMNS Baby Coil"]
+                [
+                    "Georoof Baby Coil",
+                    "Georoof Coil",
+                    "AMNS Coil",
+                    "AMNS Baby Coil",
+                    "FRP Coil",
+                ]
             )
 
         # Add conditions based on 'color' parameter
