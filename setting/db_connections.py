@@ -14,10 +14,10 @@ def ms_query_db(query, args=(), commit=False, fetch_one=False):
 
     # Get database connection details
     try:
-        server = os.getenv("pr_Server")
-        database = os.getenv("eBiz_database")
-        username = os.getenv("pr_SQL_username")
-        password = os.getenv("pr_SQL_password")
+        server = os.getenv("Test_server")
+        database = os.getenv("TestGeoAPI")
+        username = os.getenv("Test_SQL_username")
+        password = os.getenv("Test_SQL_password")
         if not all([server, database, username, password]):
             raise ValueError(
                 "Missing required environment variables for database connection."

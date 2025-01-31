@@ -1,7 +1,7 @@
 from setting.db_connections import ms_query_db
 from flask import Blueprint, request, jsonify
 import json
-# from datetime import datetime
+from datetime import datetime, timedelta
 
 order_bp = Blueprint("order", __name__)
 
@@ -141,4 +141,41 @@ def open_order(customer_code):
     except Exception as e:  
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
     
+@order_bp.route("/approve_discount_request", methods=["POST"])
+def approve_order_discount_request():
+    try:
+        data = request.get_json()
+        cardcode = data.get("cardcode")
+        validity = int(data.get("validity"))  # Ensure validity is an integer
+        group_code = data.get("group_code")
+        rate = float(data.get("Rate"))  # Ensure rate is a float
+        createdBy = 123
 
+        # Calculate Fromdate and Todate
+        Fromdate = datetime.now()
+        Todate = Fromdate + timedelta(days=validity)
+
+        # Convert to string format
+        Fromdate_str = Fromdate.strftime("%Y-%m-%d")
+        Todate_str = Todate.strftime("%Y-%m-%d")
+
+        query = """
+        EXEC uSP_CreateDiscountSettings 
+        @CardCode = ?, 
+        @GroupCode = ?, 
+        @FromDate = ?, 
+        @Todate = ?, 
+        @Rate = ?, 
+        @CreatedBy = ?
+        """
+        params = (cardcode, group_code, Fromdate_str, Todate_str, rate, createdBy)
+
+        # Run query with appropriate fetch or commit
+        ms_query_db(query, args=params, commit=True)  # Removed fetch_one=True
+
+
+        # If the stored procedure doesn't return anything, return a success message
+        return jsonify({"message": "Discount request approved successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500

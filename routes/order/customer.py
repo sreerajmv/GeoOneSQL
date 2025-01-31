@@ -52,7 +52,7 @@ def get_customer():
 
         # Generate placeholders dynamically for SQL query
         placeholders = ", ".join("?" * len(territories))
-        query = f"SELECT CardCode, CardName, Territory FROM CustomerMaster_M_Tbl WHERE Territory IN ({placeholders})"
+        query = f"SELECT CardCode, CardName, Territory FROM CustomerMaster_M_Tbl where CardType = 'c' AND Territory IN ({placeholders})"
 
         params = tuple(territories)  # Convert list to tuple for SQL execution
 
