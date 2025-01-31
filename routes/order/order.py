@@ -145,15 +145,15 @@ def open_order(customer_code):
 def approve_order_discount_request():
     try:
         data = request.get_json()
-        cardcode = data.get("cardcode")
+        cardcode = data.get("CardCode")
         validity = int(data.get("validity"))  # Ensure validity is an integer
-        group_code = data.get("group_code")
+        group_code = data.get("Group_code")
         rate = float(data.get("Rate"))  # Ensure rate is a float
         createdBy = 123
 
         # Calculate Fromdate and Todate
         Fromdate = datetime.now()
-        Todate = Fromdate + timedelta(days=validity)
+        Todate = Fromdate + timedelta(days=validity-1)
 
         # Convert to string format
         Fromdate_str = Fromdate.strftime("%Y-%m-%d")
