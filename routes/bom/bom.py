@@ -29,7 +29,7 @@ def get_itemgroup():
 
         # Add conditions based on 'group' parameter
         if group == "fg":
-            conditions.append("SubGroup IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            conditions.append("SubGroup IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             params.extend(
                 [
                     "Posco PPGL Roofing Sheet",
@@ -46,7 +46,7 @@ def get_itemgroup():
                 ]
             )
         elif group == "rm":
-            conditions.append("SubGroup IN (?, ?, ?, ?)")
+            conditions.append("SubGroup IN (?, ?, ?, ?, ?)")
             params.extend(
                 [
                     "Georoof Baby Coil",
@@ -327,7 +327,7 @@ def update_bom(fg_code):
         # Log the exception (optional) and return an error response
         print(f"Error occurred: {e}")
         return jsonify({"message": f"An error occurred: {str(e)}"}), 500
-    
+
 
 @bom_bp.route("/order", methods=["GET"])
 def get_order():
