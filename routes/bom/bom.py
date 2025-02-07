@@ -1,4 +1,4 @@
-from setting.db_connections import ms_query_db
+from setting.db_connections import ms_query_db, query_db
 from flask import Blueprint, request, jsonify
 import json
 # from datetime import datetime
@@ -26,52 +26,32 @@ def get_itemgroup():
         """
         conditions = []
         params = []
-
-        # Add conditions based on 'group' parameter
-        if group == "fg":
-            conditions.append("SubGroup IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            params.extend(
-                [
-                    "Posco PPGL Roofing Sheet",
-                    "Georoof Metalux Roofing Sheet",
-                    "AMNS PPGI Roofing Sheet",
-                    "Georoof PPGI Roofing Sheet",
-                    "Georoof PPGLX Roofing Sheet",
-                    "Geoclad PPGL Cladding Sheet",
-                    "Georoof Geolux Roofing Sheet",
-                    "AMNS PPGI Cladding Sheet",
-                    "Posco PPGL Cladding Sheet",
-                    "PPGI Roofing Sheet",
-                    "Tuffdek",
-                ]
+        if group in ["fg", "rm"]:
+            subgroup_query = (
+                "SELECT subgroup_name FROM bom_subgroup WHERE group_name = %s"
             )
-        elif group == "rm":
-            conditions.append("SubGroup IN (?, ?, ?, ?, ?)")
-            params.extend(
-                [
-                    "Georoof Baby Coil",
-                    "Georoof Coil",
-                    "AMNS Coil",
-                    "AMNS Baby Coil",
-                    "FRP Coil",
-                ]
-            )
+            subgroups = query_db(subgroup_query, (group,), fetch_one=False)
+            subgroup_values = [row["subgroup_name"] for row in subgroups]
 
-        # Add conditions based on 'color' parameter
+            if subgroup_values:
+                placeholders = ", ".join(["?"] * len(subgroup_values))
+                conditions.append(f"SubGroup IN ({placeholders})")
+                params.extend(subgroup_values)
+
         if color:
             conditions.append("Color = ?")
             params.append(color)
-
-        # Append conditions if any
+        # Apply conditions
         if conditions:
             base_query += " WHERE " + " AND ".join(conditions)
 
-        # Query the database
-        itemgroup = ms_query_db(base_query, tuple(params))
+        # Execute query
+        results = ms_query_db(base_query, tuple(params), fetch_one=False)
 
-        return jsonify(itemgroup), 200
+        return jsonify(results), 200
+
     except Exception as e:
-        return jsonify({"message": str(e)}), 400
+        return jsonify({"error": str(e)}), 500
 
 
 @bom_bp.route("/colour", methods=["GET"])

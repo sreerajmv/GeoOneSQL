@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 import os
 import platform
 from collections import OrderedDict
+import psycopg2
+from setting.config import Config
 
 
 def ms_query_db(query, args=(), commit=False, fetch_one=False):
@@ -14,10 +16,10 @@ def ms_query_db(query, args=(), commit=False, fetch_one=False):
 
     # Get database connection details
     try:
-        server = os.getenv("Test_server")
-        database = os.getenv("TestGeoAPI")
-        username = os.getenv("Test_SQL_username")
-        password = os.getenv("Test_SQL_password")
+        server = os.getenv("pr_Server")
+        database = os.getenv("eBiz_database")
+        username = os.getenv("pr_SQL_username")
+        password = os.getenv("pr_SQL_password")
         if not all([server, database, username, password]):
             raise ValueError(
                 "Missing required environment variables for database connection."
@@ -84,3 +86,49 @@ def ms_query_db(query, args=(), commit=False, fetch_one=False):
             print(f"Resource Cleanup Error: {cleanup_error}")
 
 
+
+def query_db(query, args=(), commit=False, fetch_one=False):
+    conn = psycopg2.connect(Config.DATABASE_URI)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(query, args)
+
+        # Commit if needed
+        if commit:
+            conn.commit()
+
+            # If fetch_one is True, fetch a single result row after an insert/update with RETURNING
+            if fetch_one:
+                row = cursor.fetchone()
+                if row:
+                    columns = [
+                        desc[0] for desc in cursor.description
+                    ]  # Preserve column order
+                    return OrderedDict(zip(columns, row))
+            return (
+                None  # Default return None if no RETURNING result or fetch_one is False
+            )
+        else:
+            # Fetch results as an ordered dictionary (for SELECT queries)
+            columns = [
+                desc[0] for desc in cursor.description
+            ]  # Get columns as they are in the query
+
+            if fetch_one:
+                row = cursor.fetchone()
+                if row:
+                    return OrderedDict(
+                        zip(columns, row)
+                    )  # Return first row as an OrderedDict
+            else:
+                rows = cursor.fetchall()
+                return [
+                    OrderedDict(zip(columns, row)) for row in rows
+                ]  # Return all rows as list of OrderedDicts
+
+    except psycopg2.ProgrammingError as e:
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
