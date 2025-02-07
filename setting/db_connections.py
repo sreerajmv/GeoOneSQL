@@ -1,9 +1,9 @@
-import pyodbc
-from dotenv import load_dotenv
+import pyodbc # type: ignore
+from dotenv import load_dotenv  # type: ignore
 import os
 import platform
 from collections import OrderedDict
-import psycopg2
+import psycopg2 # type: ignore
 from setting.config import Config
 
 
