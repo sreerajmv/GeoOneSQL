@@ -126,6 +126,7 @@ def open_order(customer_code):
         response = {
             "CardName": open_order["CardName"],
             "Territory": open_order["Territory"],
+            "TerritoryName": open_order["TerritoryName"],
             "CDOverdueAmount": float(open_order["CDOverdueAmount"]),
             "LastOpenBillDate": open_order["LastOpenBillDate"],
             "OverdueAmount": float(open_order["OverdueAmount"]),
