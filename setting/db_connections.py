@@ -7,13 +7,15 @@ import psycopg2 # type: ignore
 from setting.config import Config
 
 
-
-
 def cursor_ms():
     load_dotenv()
 
     # Get database connection details
     try:
+        # server = os.getenv("Test_server")
+        # database = os.getenv("SAP_test_database")
+        # username = os.getenv("Test_SQL_username")
+        # password = os.getenv("Test_SQL_password")
         server = os.getenv("pr_Server")
         database = os.getenv("eBiz_database")
         username = os.getenv("pr_SQL_username")
@@ -47,43 +49,6 @@ def cursor_ms():
 
 
 def ms_query_db(query, args=(), commit=False, fetch_one=False):
-    """
-    Executes a query on the SQL Server database with optional commit and fetch options.
-    """
-    # Load environment variables
-    # load_dotenv()
-
-    # # Get database connection details
-    # try:
-    #     server = os.getenv("pr_Server")
-    #     database = os.getenv("eBiz_database")
-    #     username = os.getenv("pr_SQL_username")
-    #     password = os.getenv("pr_SQL_password")
-    #     if not all([server, database, username, password]):
-    #         raise ValueError(
-    #             "Missing required environment variables for database connection."
-    #         )
-    # except Exception as env_error:
-    #     print(f"Environment Variable Error: {env_error}")
-    #     raise
-
-    # # Determine the driver based on the platform
-    # driver_name = (
-    #     "SQL Server"
-    #     if platform.system() == "Windows"
-    #     else "/usr/lib64/libmsodbcsql-17.so"
-    # )
-
-    # # Connect to the database
-    # try:
-    #     conn_ = pyodbc.connect(
-    #         f"DRIVER={driver_name};SERVER={server};DATABASE={database};UID={username};PWD={password}"
-    #     )
-    #     cursor = conn_.cursor()
-    # except pyodbc.InterfaceError as conn_error:
-    #     print(f"Database Connection Error: {conn_error}")
-    #     raise
-
     try:
         conn_, cursor = cursor_ms()
         # Execute the query
@@ -138,7 +103,7 @@ def query_db(query, args=(), commit=False, fetch_one=False):
         if commit:
             conn.commit()
 
-            # If fetch_one is True, fetch a single result row after an insert/update with RETURNING
+
             if fetch_one:
                 row = cursor.fetchone()
                 if row:

@@ -61,3 +61,35 @@ def get_customer():
 
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+@customer_bp.route("/by_territory", methods=["GET"])
+def get_customer_by_territory():
+    """API to fetch customer details based on employee territory"""
+    try:
+        territory_code = request.args.get("territory")
+
+        # Validate employee_code
+        if not territory_code:
+            return jsonify({"message": "Territory Code cannot be None"}), 400
+
+        query = "SELECT CardCode, CardName, Territory FROM CustomerMaster_M_Tbl where CardType = 'c' AND Territory = ?"
+
+        params = (territory_code,)  # Convert list to tuple for SQL execution
+
+        customer = ms_query_db(query, params, fetch_one=False)
+        return jsonify(customer), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+    
+@customer_bp.route("/territory", methods=["GET"])
+def get_territory():
+    """API to fetch customer details based on employee territory"""
+    try:
+        query = "select TerritoryID, Descript, ZoneID, AreaID, RegionID, EmpId, OrderBy, Mail from Bde_Territory_M_Tbl"
+        territory = ms_query_db(query, fetch_one=False)
+        return jsonify(territory), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500

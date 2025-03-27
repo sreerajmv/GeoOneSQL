@@ -18,4 +18,18 @@ def get_itemgroup():
             return jsonify(itemgroup), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+@item_bp.route("/stock_summary", methods=["GET"])
+def get_stock_summary():
+    try:
+        # Initialize query and parameters
+        base_query = "Stock_Summary"
+
+        # Query the database
+        itemgroup = ms_query_db(base_query)
+
+        if itemgroup:
+            return jsonify(itemgroup), 200
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
 

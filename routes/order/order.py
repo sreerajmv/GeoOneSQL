@@ -1,10 +1,11 @@
-from setting.db_connections import ms_query_db
+from setting.db_connections import ms_query_db, cursor_ms
 from flask import Blueprint, request, jsonify
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv  # type: ignore
 import os
 import requests # type: ignore
+import pyodbc
 
 order_bp = Blueprint("order", __name__)
 
@@ -91,7 +92,7 @@ def get_order():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"message": "Internal server error."}), 500
-
+    
 @order_bp.route("/orderApprove", methods=["POST"])
 def approve_order():
     try:
@@ -100,14 +101,73 @@ def approve_order():
         if not (soid and soid.isdigit() and user_id and user_id.isdigit()):
             return jsonify({"message": "Missing or invalid query parameters."}), 400
         params = (soid, user_id)
-        query = "uSP_ApproveSalesOrderDetails_ManualPost @SOID=?,@userId=?"
-        result = ms_query_db(query, args=params, commit=False, fetch_one=True)
+        conn, cursor = cursor_ms()
+        # Execute the stored procedure
+        query = "EXEC uSP_ApproveSalesOrderDetails_ManualPost @SOID=?, @userId=?"
+        cursor.execute(query, params)
+        result = cursor.fetchall()
+
+        conn.commit()
+        
+        # Close the cursor and connection
+        cursor.close()
+        conn.close()
         if result:
-            return jsonify(result), 200
+            first_tuple = result[0]
+            status = first_tuple[0]
+            message = first_tuple[1]
+            return jsonify({"status": status, "message": message}), 200
         else:
             return jsonify({"message": "No data found."}), 404
+
+
     except Exception as e:
+        # Rollback in case of error
+        if "conn" in locals():
+            conn.rollback()
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+
+@order_bp.route("/outstanding/<customer_code>", methods=["GET"])
+def outstanding(customer_code):
+    try:
+        query = """
+                    SELECT
+                            A.InvoiceDate,
+                            A.InvoiceNum AS InvoiceNo,
+                            CASE WHEN DATEDIFF(DAY,CONVERT(datetime,A.InvoiceDate,103),GETDATE()) >= 45 THEN 'Yes'
+                                ELSE NULL END AS 'OverDue',
+                            CONVERT(decimal, A.PendingAmount) AS Pending,
+                    DATEDIFF(DAY,CONVERT(datetime,A.InvoiceDate,103),GETDATE()) as [Days],
+                            A.PaymentTermsValue AS [PTerms],
+                            A.BillAmount,
+                            A.PaidSum ,
+                            ISNULL(f.Location,'Nil') AS Location
+                        FROM 
+                            OutstandingMaster_M_Tbl AS A
+                        INNER JOIN CustomerMaster_M_Tbl AS B ON B.CardCode = A.CardCode
+                        LEFT JOIN Bde_Territory_M_Tbl AS C ON C.TerritoryID = B.Territory
+                        LEFT JOIN Area_M_Tbl AS D ON D.AreaID = C.AreaID
+                        LEFT JOIN dbo.Region_M_Tbl AS REG ON C.RegionID=REG.RegionID
+                        LEFT JOIN 
+                            (
+                                SELECT DISTINCT DocEntry, LocationID
+                                FROM SAP_AR_Invoice_Line_Details_M_Tbl
+                            ) AS e ON A.DocEntry = e.DocEntry 
+                        LEFT JOIN LocationMaster_M_Tbl as f on f.LocationId = e.LocationID
+                        WHERE A.DocStatus = 'OPEN'  AND A.CardCode = ?
+                        order by DATEDIFF(DAY,CONVERT(datetime,A.InvoiceDate,103),GETDATE())
+                """
+        params = (customer_code,)
+        outstanding_details = ms_query_db(query, params, fetch_one=False)
+        return jsonify(outstanding_details), 200
+
+    except Exception as e:  
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+
+
     
 
 @order_bp.route("/openOrder/<customer_code>", methods=["GET"])
