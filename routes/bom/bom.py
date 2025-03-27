@@ -52,6 +52,44 @@ def get_itemgroup():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+  
+@bom_bp.route("/main_group", methods=["GET"])
+def get_maingroup():
+    return _get_distinct_column_values("MainGroup")
+
+
+@bom_bp.route("/category", methods=["GET"])
+def get_category():
+    return _get_distinct_column_values("Category")
+
+
+def _get_distinct_column_values(column_name):
+    """Helper function to get distinct values for a specific column"""
+    try:
+        # Validate column name to prevent SQL injection
+        valid_columns = ["MainGroup", "Category"]
+        if column_name not in valid_columns:
+            return jsonify({"error": "Invalid column requested"}), 400
+
+        # Using parameterized query with string formatting for the column name
+        # (Note: This is safe because we've validated the column_name above)
+        query = f"""
+            SELECT DISTINCT({column_name}) as value
+            FROM ItemMaster_M_Tbl
+            WHERE {column_name} IS NOT NULL
+            ORDER BY value
+        """
+
+        results = ms_query_db(query, fetch_one=False)
+
+        # Format results as a simple array if that's preferred
+        formatted_results = [item["value"] for item in results] if results else []
+
+        return jsonify(formatted_results), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+  
 
 
 @bom_bp.route("/colour", methods=["GET"])
@@ -59,9 +97,13 @@ def get_colour():
     try:
         # Get the query parameter 'group'
         group = request.args.get("group", type=str)
+        category = request.args.get("category", type=str)
 
         if "group" in request.args and group is None or group == "":
             return jsonify({"message": "Group cannot be None"}), 400
+        
+        if "category" in request.args and category is None or category == "":
+            return jsonify({"message": "Category cannot be None"}), 400
 
         # Initialize query and parameters
         base_query = """
@@ -77,6 +119,11 @@ def get_colour():
             conditions.append("Group3 = ?")
             params.append(group)
 
+        # Add conditions based on 'category' parameter
+        if category:
+            conditions.append("Category = ?")
+            params.append(category)
+
         # Append conditions if any
         if conditions:
             base_query += " WHERE " + " AND ".join(conditions)
@@ -87,6 +134,58 @@ def get_colour():
         return jsonify(itemgroup), 200
     except Exception as e:
         return jsonify({"message": str(e)}), 400
+    
+
+
+#  if "user_id" in request.args and user_id is None or user_id == "":
+#             return jsonify({"message": "user_id cannot be None"}), 400
+
+
+@bom_bp.route("/user_location", methods=["GET"])
+def get_user_location():
+    try:
+        # Get the query parameter 'user_id'
+        user_ref_code = request.args.get("user_id")
+
+        # Validate user_id parameter
+        if "user_id" in request.args and user_ref_code is None or user_ref_code == "":
+                return jsonify({"message": "user_id cannot be None"}), 400
+        # First query to get actual UserID from RefCode
+        user_query = "SELECT UserID FROM TBL_Users WHERE RefCode = ?"
+        try:
+            user_result = ms_query_db(user_query, (user_ref_code,))
+            if not user_result:
+                return jsonify({"message": "User not found"}), 404
+
+            user_id = user_result[0][
+                "UserID"
+            ]  # Assuming ms_query_db returns a list of dicts
+
+            print(user_id)
+        except Exception as e:
+            return jsonify({"message": f"Error fetching user: {str(e)}"}), 500
+
+        # Main query to get user locations
+        base_query = """
+            SELECT 
+                A.UserID,
+                A.LocationCode,
+                B.Location
+            FROM TBL_UserLocations AS A
+            LEFT JOIN LocationMaster_M_Tbl AS B 
+                ON A.LocationCode = B.LocationId
+            WHERE A.UserID = ?
+            """
+
+        try:
+            locations = ms_query_db(base_query, (str(user_id),))
+            return jsonify(locations), 200
+        except Exception as e:
+            return jsonify({"message": f"Error fetching locations: {str(e)}"}), 500
+
+    except Exception as e:
+        return jsonify({"message": f"Unexpected error: {str(e)}"}), 500
+
 
 
 @bom_bp.route("/bomitem", methods=["GET"])
