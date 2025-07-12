@@ -136,11 +136,6 @@ def get_colour():
         return jsonify({"message": str(e)}), 400
     
 
-
-#  if "user_id" in request.args and user_id is None or user_id == "":
-#             return jsonify({"message": "user_id cannot be None"}), 400
-
-
 @bom_bp.route("/user_location", methods=["GET"])
 def get_user_location():
     try:

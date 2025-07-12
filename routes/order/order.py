@@ -299,3 +299,194 @@ def approve_order_discount_request():
 
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+# @order_bp.route("/approved_open_orders/<int:user_id>", methods=["GET"])
+# def get_approved_orders(user_id):
+#     try:
+#         query = """
+
+#                     SELECT
+#                         S.SalesOrderNo AS [Order_No],
+#                         S.NOrderType AS OrderType,
+#                         S.CreatedDateTime AS MakingTime,
+#                         S.CustomerCode,
+#                         E.CardName,
+#                         U.Name,
+#                         C.Description AS [itemName],
+#                         F.Location,
+#                         CAST(
+#                             CASE D.UomCode
+#                                 WHEN 'SQM' THEN (SL.Quantity * TRY_CONVERT(NUMERIC(10,2), C.altuntcom1)) / 1000
+#                                 WHEN 'KGS' THEN TRY_CONVERT(NUMERIC(10,2), SL.Quantity) / 1000
+#                                 WHEN 'MTR' THEN (SL.Quantity * TRY_CONVERT(NUMERIC(10,2), C.Width) * TRY_CONVERT(NUMERIC(10,2), C.altuntcom1)) / 1000
+#                                 WHEN 'NOS' THEN (SL.Quantity * TRY_CONVERT(NUMERIC(10,2), C.altuntcom1)) / 1000
+#                                 ELSE 0 
+#                             END AS NUMERIC(10,2)
+#                         ) AS [Tonnage],
+#                         S.SalesOrderStatus AS [Status]
+#                     FROM SAP_SalesOrder_M_Tbl S
+#                     INNER JOIN SAP_SalesOrderLine_M_Tbl SL ON S.DocEntry = SL.DocEntry
+#                     INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
+#                     INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+#                     INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode AND E.CardType = 'C'
+#                     INNER JOIN LocationMaster_M_Tbl F ON F.Code = SL.LocCode
+#                     INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name AND A.SlNo NOT IN (2, 1004, 1005, 1006, 1009)
+#                     INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
+#                     INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
+#                     INNER JOIN SalesEmployeeMaster_M_Tbl SE ON SD.SalesPerson = SE.SalesEmployeeCode
+#                     INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId = SE.EmployeeId AND EM.EmployeeId = ?
+                        
+        
+#         """
+#         params = (str(user_id),)
+#         draft_orders = ms_query_db(query, params, fetch_one=False)
+#         return jsonify(draft_orders), 200
+#     except Exception as e:
+#         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+@order_bp.route("/approved_open_orders/<int:user_id>", methods=["GET"])
+def get_approved_orders(user_id):
+    try:
+        query = """
+
+                    SELECT
+                        S.SalesOrderNo AS [Order_No],
+                        S.NOrderType AS OrderType,
+                        S.CreatedDateTime AS MakingTime,
+                        S.CustomerCode,
+                        E.CardName,
+                        U.Name,
+                        C.Description AS [itemName],
+                        F.Location,
+                        CAST(
+                            ISNULL(
+                                CASE 
+                                    WHEN D.UomCode = 'SQM' THEN 
+                                        TRY_CAST(SL.Quantity * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2)) / 1000
+                                    WHEN D.UomCode = 'KGS' THEN 
+                                        TRY_CAST(SL.Quantity AS NUMERIC(10,2)) / 1000
+                                    WHEN D.UomCode = 'MTR' THEN 
+                                        TRY_CAST((SL.Quantity * TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2)) / 1000
+                                    WHEN D.UomCode = 'NOS' THEN 
+                                        TRY_CAST(SL.Quantity * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2)) / 1000
+                                    ELSE 0 
+                                END,
+                            0
+                            ) AS NUMERIC(10,2)
+                        ) AS [Tonnage],
+                        S.SalesOrderStatus AS [Status]
+
+                    FROM SAP_SalesOrderLine_M_Tbl SL
+                    INNER JOIN SAP_SalesOrder_M_Tbl S ON S.DocEntry = SL.DocEntry
+                    INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode
+                    INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+                    INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode
+                    INNER JOIN LocationMaster_M_Tbl F ON F.Code = SL.LocCode
+                    INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name
+                    INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
+                    INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
+                    INNER JOIN SalesEmployeeMaster_M_Tbl SE ON SD.SalesPerson=SE.SalesEmployeeCode
+                    INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
+
+                    WHERE 
+                        A.SlNo NOT IN (2, 1004, 1005, 1006, 1009) AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
+                        AND E.CardType = 'C' AND EM.EmployeeId=?   
+                        
+        
+        """
+        params = (str(user_id),)
+        draft_orders = ms_query_db(query, params, fetch_one=False)
+        return jsonify(draft_orders), 200
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+
+
+
+
+# SELECT
+#     S.SalesOrderNo AS [Order_No],
+#     S.NOrderType AS OrderType,
+#     S.CreatedDateTime AS MakingTime,
+#     S.CustomerCode,
+#     E.CardName,
+#     U.Name,
+#     C.Description AS [itemName],
+#     F.Location,
+#     CAST(
+#         CASE D.UomCode
+#             WHEN 'SQM' THEN (SL.Quantity * TRY_CONVERT(NUMERIC(10,2), C.altuntcom1)) / 1000
+#             WHEN 'KGS' THEN TRY_CONVERT(NUMERIC(10,2), SL.Quantity) / 1000
+#             WHEN 'MTR' THEN (SL.Quantity * TRY_CONVERT(NUMERIC(10,2), C.Width) * TRY_CONVERT(NUMERIC(10,2), C.altuntcom1)) / 1000
+#             WHEN 'NOS' THEN (SL.Quantity * TRY_CONVERT(NUMERIC(10,2), C.altuntcom1)) / 1000
+#             ELSE 0 
+#         END AS NUMERIC(10,2)
+#     ) AS [Tonnage],
+#     S.SalesOrderStatus AS [Status]
+# FROM SAP_SalesOrder_M_Tbl S
+# INNER JOIN SAP_SalesOrderLine_M_Tbl SL ON S.DocEntry = SL.DocEntry
+# INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
+# INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+# INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode AND E.CardType = 'C'
+# INNER JOIN LocationMaster_M_Tbl F ON F.Code = SL.LocCode
+# INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name AND A.SlNo NOT IN (2, 1004, 1005, 1006, 1009)
+# INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
+# INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
+# INNER JOIN SalesEmployeeMaster_M_Tbl SE ON SD.SalesPerson = SE.SalesEmployeeCode
+# INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId = SE.EmployeeId AND EM.EmployeeId = 1207
+    
+
+
+@order_bp.route("/approved_open_orders_summary/<int:user_id>", methods=["GET"])
+def approved_open_orders_summary(user_id):
+    try:
+        query = """
+
+                    SELECT 
+                        SUM(
+                            CAST(
+                                ISNULL(
+                                    CASE 
+                                        WHEN D.UomCode = 'SQM' THEN 
+                                            TRY_CAST(SL.Quantity * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2)) / 1000
+                                        WHEN D.UomCode = 'KGS' THEN 
+                                            TRY_CAST(SL.Quantity AS NUMERIC(10,2)) / 1000
+                                        WHEN D.UomCode = 'MTR' THEN 
+                                            TRY_CAST((SL.Quantity * TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2)) / 1000
+                                        WHEN D.UomCode = 'NOS' THEN 
+                                            TRY_CAST(SL.Quantity * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2)) / 1000
+                                        ELSE 0 
+                                    END,
+                                0
+                                ) AS NUMERIC(10,2)
+                            )
+                        ) AS TotalTonnage
+
+                    -- same FROM and JOINs --
+
+                    FROM SAP_SalesOrderLine_M_Tbl SL
+                    INNER JOIN SAP_SalesOrder_M_Tbl S ON S.DocEntry = SL.DocEntry
+                    INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode
+                    INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+                    INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode
+                    INNER JOIN LocationMaster_M_Tbl F ON F.Code = SL.LocCode
+                    INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name
+                    INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
+                    INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
+                    INNER JOIN SalesEmployeeMaster_M_Tbl SE ON SD.SalesPerson = SE.SalesEmployeeCode
+                    INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId = SE.EmployeeId
+
+                    WHERE 
+                        A.SlNo NOT IN (2, 1004, 1005, 1006, 1009) 
+                        AND E.CardType = 'C' AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
+                        AND EM.EmployeeId = ?
+
+        """
+        params = (str(user_id),)
+        draft_orders = ms_query_db(query, params, fetch_one=True)
+        return jsonify(draft_orders), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
