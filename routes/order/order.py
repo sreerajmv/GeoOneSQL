@@ -416,12 +416,12 @@ def approved_open_orders_summary(user_id):
 @order_bp.route("/draft_orders/<int:user_id>", methods=["GET"])
 def draft_orders(user_id):
     try:
-        sales_person = request.args.get("sales_person")
+        # sales_person = request.args.get("sales_person")
         status = request.args.get("status")
         created_date = request.args.get("created_date")
         query = """
                     SELECT 
-                        B.SlNo [Order No],
+                        B.SlNo [Order_No],
                         CASE WHEN B.OrderType='WO' THEN 'WorkOrder'
                         WHEN B.OrderType='SO' THEN 'SalesOrder' 
                         ELSE '' END AS OrderType,
@@ -457,11 +457,92 @@ def draft_orders(user_id):
         conditions = []
         params = []
 
+        if user_id:
+            conditions.append(
+                "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')"
+            )
+            params.append(user_id)
 
+        if status:
+            if status == "open":
+                conditions.append("B.Status IN (?, ?, ?)")
+                params.extend(["N", "R", "P"])
+            elif status == "cancelled":
+                conditions.append("B.Status = ?")
+                params.append("C")
+           
+            else:
+                conditions.append("B.Status = ?")
+                params.append(status)
 
-        
-        params = (str(user_id),)
-        draft_orders = ms_query_db(query, params, fetch_all=True)
+        if created_date:
+            conditions.append("CONVERT(date, B.MakingTime,103) = ?")
+            params.append(created_date)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        draft_orders = ms_query_db(query, params, fetch_one=False)
+        return jsonify(draft_orders), 200
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+@order_bp.route("/draft_orders_summary/<int:user_id>", methods=["GET"])
+def draft_orders_summary(user_id):
+    try:
+        # sales_person = request.args.get("sales_person")
+        status = request.args.get("status")
+        created_date = request.args.get("created_date")
+        query = """
+                   SELECT 
+
+                        SUM(CAST(ISNULL(CASE 
+                            WHEN D.UomCode = 'SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                            WHEN D.UomCode = 'KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
+                            WHEN D.UomCode = 'MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                            WHEN D.UomCode = 'NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                            ELSE 0 
+                        END, 0) AS NUMERIC(10,2))) AS total_tonnage
+    
+                    FROM 
+                        TBL_SalesOrderProductDetails A
+                        INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
+                        INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
+                        INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
+                        INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
+                        INNER JOIN TBL_Users U ON U.UserID=A.MakerID
+                        INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
+                        INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
+                """
+        conditions = []
+        params = []
+
+        if user_id:
+            conditions.append(
+                "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')"
+            )
+            params.append(user_id)
+
+        if status:
+            if status == "open":
+                conditions.append("B.Status IN (?, ?, ?)")
+                params.extend(["N", "R", "P"])
+            elif status == "cancelled":
+                conditions.append("B.Status = ?")
+                params.append("C")
+           
+            else:
+                conditions.append("B.Status = ?")
+                params.append(status)
+
+        if created_date:
+            conditions.append("CONVERT(date, B.MakingTime,103) = ?")
+            params.append(created_date)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        draft_orders = ms_query_db(query, params, fetch_one=True)
         return jsonify(draft_orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
