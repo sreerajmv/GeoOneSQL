@@ -21,7 +21,33 @@ def fetch_employee_territory(employee_code):
 
     except Exception as e:
         raise Exception(f"Database error: {str(e)}")
+    
 
+@customer_bp.route("/cse_territory/<employee_code>", methods=["GET"])   
+def fetch_cse_territory(employee_code):
+    """Helper function to get territory IDs and names from the database for a given employee"""
+    try:
+        query = """
+                SELECT 
+                    A.TerritoryID,
+                    A.Descript AS Territory
+                FROM 
+                    Bde_Territory_M_Tbl A
+                    LEFT JOIN Zone_M_Tbl B ON A.ZoneID = B.ZoneID
+                WHERE 
+                    B.EmpId = ?
+                """
+        params = (employee_code,)
+        territories = ms_query_db(query, params, fetch_one=False)
+
+        # Return list of dictionaries with both ID and Territory name
+        return [
+            {"TerritoryID": row["TerritoryID"], "Territory": row["Territory"]}
+            for row in territories
+        ]
+
+    except Exception as e:
+        raise Exception(f"Database error: {str(e)}")
 
 @customer_bp.route("/employee_territory/<employee_code>", methods=["GET"])
 def get_employee_territory(employee_code):
@@ -32,6 +58,8 @@ def get_employee_territory(employee_code):
 
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
 
 
 @customer_bp.route("/customer", methods=["GET"])
@@ -81,6 +109,7 @@ def get_customer_by_territory():
 
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
     
     
 @customer_bp.route("/territory", methods=["GET"])
