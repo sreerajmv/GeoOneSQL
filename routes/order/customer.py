@@ -41,10 +41,12 @@ def fetch_cse_territory(employee_code):
         territories = ms_query_db(query, params, fetch_one=False)
 
         # Return list of dictionaries with both ID and Territory name
-        return [
+        list_territory = [
             {"TerritoryID": row["TerritoryID"], "Territory": row["Territory"]}
             for row in territories
         ]
+
+        return jsonify(list_territory), 200
 
     except Exception as e:
         raise Exception(f"Database error: {str(e)}")

@@ -301,11 +301,13 @@ def approve_order_discount_request():
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
 
 
-
     
 @order_bp.route("/approved_open_orders/<int:user_id>", methods=["GET"])
 def get_approved_orders(user_id):
     try:
+        territory_id = request.args.get("territory_id")
+        created_date = request.args.get("created_date")
+
         query = """
 
                     SELECT
@@ -334,35 +336,51 @@ def get_approved_orders(user_id):
                             ) AS NUMERIC(10,2)
                         ) AS [Tonnage],
                         S.SalesOrderStatus AS [Status]
-
                     FROM SAP_SalesOrderLine_M_Tbl SL
                     INNER JOIN SAP_SalesOrder_M_Tbl S ON S.DocEntry = SL.DocEntry
-                    INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode
+                    INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode  AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
                     INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
                     INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode
                     INNER JOIN LocationMaster_M_Tbl F ON F.Code = SL.LocCode
-                    INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name
+                    INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name  AND A.SlNo NOT IN (2, 1004, 1005, 1006, 1009)
                     INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
                     INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
                     INNER JOIN SalesEmployeeMaster_M_Tbl SE ON SD.SalesPerson=SE.SalesEmployeeCode
                     INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
-
-                    WHERE 
-                        A.SlNo NOT IN (2, 1004, 1005, 1006, 1009) AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
-                        AND E.CardType = 'C' AND EM.EmployeeId=?   
                         
         
-        """
-        params = (str(user_id),)
-        draft_orders = ms_query_db(query, params, fetch_one=False)
-        return jsonify(draft_orders), 200
-    except Exception as e:
-        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+            """
+        conditions = []
+        params = []
     
+        if user_id:
+            conditions.append("EM.EmployeeId = ?")
+            params.append(user_id)
+
+        if territory_id:
+            conditions.append("E.Territory = ?")
+            params.append(territory_id)
+
+        if created_date:
+            conditions.append("convert(date, S.DocDate, 103)= ?")
+            params.append(created_date)
+    
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+    
+   
+        params = tuple(params)
+        approved_orders = ms_query_db(query, params, fetch_one=False)
+        return jsonify(approved_orders), 200
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500    
+
 
 @order_bp.route("/approved_open_orders_summary/<int:user_id>", methods=["GET"])
 def approved_open_orders_summary(user_id):
     try:
+        territory_id = request.args.get("territory_id")
+        created_date = request.args.get("created_date")
         query = """
 
                     SELECT 
@@ -389,26 +407,43 @@ def approved_open_orders_summary(user_id):
 
                     FROM SAP_SalesOrderLine_M_Tbl SL
                     INNER JOIN SAP_SalesOrder_M_Tbl S ON S.DocEntry = SL.DocEntry
-                    INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode
+                    INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode  AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
                     INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
                     INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode
                     INNER JOIN LocationMaster_M_Tbl F ON F.Code = SL.LocCode
-                    INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name
+                    INNER JOIN TBL_SalesOrderStatus A ON S.SalesOrderStatus = A.Name  AND A.SlNo NOT IN (2, 1004, 1005, 1006, 1009)
                     INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
                     INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
-                    INNER JOIN SalesEmployeeMaster_M_Tbl SE ON SD.SalesPerson = SE.SalesEmployeeCode
-                    INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId = SE.EmployeeId
-
-                    WHERE 
-                        A.SlNo NOT IN (2, 1004, 1005, 1006, 1009) 
-                        AND E.CardType = 'C' AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')
-                        AND EM.EmployeeId = ?
+                    INNER JOIN SalesEmployeeMaster_M_Tbl SE ON SD.SalesPerson=SE.SalesEmployeeCode
+                    INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
 
         """
-        params = (str(user_id),)
-        draft_orders = ms_query_db(query, params, fetch_one=True)
-        return jsonify(draft_orders), 200
+        conditions = []
+        params = []
 
+        if user_id:
+            conditions.append("EM.EmployeeId = ?")
+            params.append(user_id)
+
+        if territory_id:
+            conditions.append("E.Territory = ?")
+            params.append(territory_id)
+
+        if created_date:
+            conditions.append("convert(date, S.DocDate, 103)= ?")
+            params.append(created_date)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        params = tuple(params)
+        approved_orders = ms_query_db(query, params, fetch_one=True)
+
+        if approved_orders is None or "TotalTonnage" not in approved_orders:
+            return jsonify({"TotalTonnage": 0}), 200
+
+
+        return jsonify(approved_orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
 
@@ -419,6 +454,8 @@ def draft_orders(user_id):
         # sales_person = request.args.get("sales_person")
         status = request.args.get("status")
         created_date = request.args.get("created_date")
+        territory_id = request.args.get("territory_id")
+        approved_date = request.args.get("approved_date")
         query = """
                     SELECT 
                         B.SlNo [Order_No],
@@ -479,6 +516,14 @@ def draft_orders(user_id):
             conditions.append("CONVERT(date, B.MakingTime,103) = ?")
             params.append(created_date)
 
+        if territory_id:
+            conditions.append("E.Territory = ?")
+            params.append(territory_id)
+
+        if approved_date:
+            conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
+            params.append(approved_date)
+
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
@@ -492,6 +537,8 @@ def draft_orders_summary(user_id):
         # sales_person = request.args.get("sales_person")
         status = request.args.get("status")
         created_date = request.args.get("created_date")
+        territory_id = request.args.get("territory_id")
+        approved_date = request.args.get("approved_date")
         query = """
                    SELECT 
 
@@ -539,10 +586,23 @@ def draft_orders_summary(user_id):
             conditions.append("CONVERT(date, B.MakingTime,103) = ?")
             params.append(created_date)
 
+        if territory_id:
+            conditions.append("E.Territory = ?")
+            params.append(territory_id)
+
+        if approved_date:
+            conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
+            params.append(approved_date)
+
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
         draft_orders = ms_query_db(query, params, fetch_one=True)
+
+        if draft_orders is None or draft_orders.get('total_tonnage') is None:
+            return jsonify({"total_tonnage": 0}), 200
+
+
         return jsonify(draft_orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
