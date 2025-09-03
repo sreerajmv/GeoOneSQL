@@ -124,3 +124,6 @@ def get_territory():
 
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+
+

@@ -606,3 +606,83 @@ def draft_orders_summary(user_id):
         return jsonify(draft_orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
+
+
+@order_bp.route("/orders_to_invoice", methods=["GET"])
+def orders_to_invoice():
+    try:
+        cardcode = request.args.get("cardcode")
+        orderType = request.args.get("orderType")
+        fromdate = request.args.get("fromdate")
+        todate = request.args.get("todate")
+
+        query = """
+            SELECT 
+                S.SalesOrderNo,
+                CONVERT(DATE,SD.MakingTime) AS DraftDate,
+                S.DocDate AS OrderDate,
+                B.CustomerId,
+                B.CustomerName,
+                S.orderType,
+                SUM(CASE 
+                    WHEN I.UOM IN (1,4)
+                        THEN CAST((CAST(A.Quantity AS numeric(10,3)) * CAST(I.altuntcom1 AS numeric(10,3)))/1000 AS numeric(10,2))
+                    WHEN I.UOM IN (3)
+                        THEN CAST((CAST(A.Quantity AS numeric(10,3)))/1000 AS numeric(10,2))  
+                    ELSE '0' END) AS [Planned Qty],
+                B.InvoiceNo,
+                B.InvoiceDate,
+                L.Location
+            FROM 
+                SAP_AR_Invoice_Line_Details_M_Tbl A
+                INNER JOIN SAP_AR_Invoice_Details_M_Tbl B ON A.DocEntry = B.DocEntry AND A.InvoiceNo = B.InvoiceNo
+                INNER JOIN SAP_SalesOrder_M_Tbl S ON S.DocEntry=A.SalesOrderDocEntryNo
+                INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId=SD.SlNo
+                INNER JOIN ItemMaster_M_Tbl I ON I.ItemCode=A.ItemCode
+                INNER JOIN LocationMaster_M_Tbl L ON A.LocationID=L.LocationId
+        """
+
+        conditions = []
+        params = []
+
+        # ✅ Always add this condition
+        conditions.append("B.InvoiceStatus NOT IN ('Cancelled')")
+
+        if fromdate and todate:
+            conditions.append("CONVERT(date,B.InvoiceDate,103) BETWEEN ? AND ?")
+            params.append(fromdate)
+            params.append(todate)
+
+        if orderType:
+            conditions.append("S.OrderType = ?")
+            params.append(orderType)
+
+        if cardcode:
+            conditions.append("B.CustomerId = ?")
+            params.append(cardcode)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        # ✅ Add GROUP BY for all non-aggregated columns
+        query += """
+            GROUP BY 
+                S.SalesOrderNo,
+                CONVERT(DATE,SD.MakingTime),
+                S.DocDate,
+                B.CustomerId,
+                B.CustomerName,
+                S.orderType,
+                B.InvoiceNo,
+                B.InvoiceDate,
+                L.Location
+        """
+
+        orders = ms_query_db(query, params, fetch_one=False)
+
+        return jsonify(orders), 200
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
