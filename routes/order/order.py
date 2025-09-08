@@ -620,7 +620,7 @@ def orders_to_invoice():
         query = """
             SELECT 
                 S.SalesOrderNo,
-                CONVERT(DATE,SD.MakingTime) AS DraftDate,
+                CONVERT(VARCHAR(10), SD.MakingTime, 105) AS DraftDate,
                 S.DocDate AS OrderDate,
                 B.CustomerId,
                 B.CustomerName,
@@ -630,7 +630,7 @@ def orders_to_invoice():
                         THEN CAST((CAST(A.Quantity AS numeric(10,3)) * CAST(I.altuntcom1 AS numeric(10,3)))/1000 AS numeric(10,2))
                     WHEN I.UOM IN (3)
                         THEN CAST((CAST(A.Quantity AS numeric(10,3)))/1000 AS numeric(10,2))  
-                    ELSE '0' END) AS [Planned Qty],
+                    ELSE '0' END) AS [Planned_Qty],
                 B.InvoiceNo,
                 B.InvoiceDate,
                 L.Location
@@ -655,7 +655,7 @@ def orders_to_invoice():
             params.append(todate)
 
         if orderType:
-            conditions.append("S.OrderType = ?")
+            conditions.append("S.NOrderType = ?")
             params.append(orderType)
 
         if cardcode:
@@ -665,24 +665,30 @@ def orders_to_invoice():
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
-        # ✅ Add GROUP BY for all non-aggregated columns
+        # ✅ Add GROUP BY for all non-aggregated columns including orderType
         query += """
             GROUP BY 
                 S.SalesOrderNo,
-                CONVERT(DATE,SD.MakingTime),
+                CONVERT(VARCHAR(10), SD.MakingTime, 105),
                 S.DocDate,
                 B.CustomerId,
                 B.CustomerName,
-                S.orderType,
+                S.orderType,  -- ✅ Now included in GROUP BY
+                S.NOrderType,
                 B.InvoiceNo,
                 B.InvoiceDate,
                 L.Location
         """
-
+        # print(query)
         orders = ms_query_db(query, params, fetch_one=False)
 
         return jsonify(orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+
+
+
 
 
