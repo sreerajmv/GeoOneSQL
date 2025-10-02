@@ -10,6 +10,7 @@ def fetch_employee_territory(employee_code):
         query = """
                     SELECT 
                         A.TeritoryID
+                        
                     FROM TBL_UserTeritory AS A
                     LEFT JOIN TBL_Users AS B ON A.UserID = B.UserID
                     WHERE 
@@ -21,6 +22,38 @@ def fetch_employee_territory(employee_code):
 
     except Exception as e:
         raise Exception(f"Database error: {str(e)}")
+    
+
+def fetch_employee_territory_new(employee_code):
+    """Helper function to get territory IDs and names from the database"""
+    try:
+        query = """
+                SELECT 
+                    A.TeritoryID,
+                    C.descript AS TerritoryName
+                FROM TBL_UserTeritory A
+                LEFT JOIN TBL_Users B ON A.UserID = B.UserID
+                LEFT JOIN Territory_M_Tbl C ON C.TerritryID = A.TeritoryID
+                WHERE 
+                    B.RefCode = ?
+                """
+        params = (str(employee_code),)
+        territories = ms_query_db(query, params, fetch_one=False)
+
+        # list_territory = [
+        #     {"TerritoryID": row["TeritoryID"], "Territory": row["TerritoryName"]}
+        #     for row in territories
+        # ]
+
+        # print(list_territory)
+        return territories  
+
+    except Exception as e:
+        raise Exception(f"Database error: {str(e)}")
+
+
+
+
     
 
 @customer_bp.route("/cse_territory/<employee_code>", methods=["GET"])   
@@ -60,6 +93,55 @@ def get_employee_territory(employee_code):
 
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+# @customer_bp.route("/employee_territory_new/<employee_code>", methods=["GET"])
+# def get_employee_territory_new(employee_code):
+#     """API to fetch employee territory"""
+#     try:
+#         territories = fetch_employee_territory_new(employee_code)
+
+#         list_territory = [
+#             {"TerritoryID": row["TeritoryID"], "Territory": row["TerritoryName"]}
+#             for row in territories
+#         ]
+
+#         print(list_territory)
+
+
+
+#         # print(territory_ids)
+#         return jsonify(list_territory), 200
+
+#     except Exception as e:
+#         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+
+
+@customer_bp.route("/employee_territory_new/<employee_code>", methods=["GET"])
+def get_employee_territory_new(employee_code):
+    """API to fetch employee territory"""
+    try:
+        # Get exclude_territory_id from query parameter, default to 42 if not provided
+        exclude_territory_id = request.args.get(
+            "exclude_territory_id", default=42, type=int
+        )
+
+        territories = fetch_employee_territory_new(employee_code)
+
+        list_territory = [
+            {"TerritoryID": row["TeritoryID"], "Territory": row["TerritoryName"]}
+            for row in territories
+            if row["TeritoryID"] != exclude_territory_id
+        ]
+
+        return jsonify(list_territory), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
 
 
 

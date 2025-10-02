@@ -633,7 +633,8 @@ def orders_to_invoice():
                     ELSE '0' END) AS [Planned_Qty],
                 B.InvoiceNo,
                 B.InvoiceDate,
-                L.Location
+                L.Location,
+                DATEDIFF(DAY, CONVERT(DATE, S.DocDate,105), CONVERT(DATE, B.InvoiceDate, 105)) AS OrdertoInvoiceDays
             FROM 
                 SAP_AR_Invoice_Line_Details_M_Tbl A
                 INNER JOIN SAP_AR_Invoice_Details_M_Tbl B ON A.DocEntry = B.DocEntry AND A.InvoiceNo = B.InvoiceNo
