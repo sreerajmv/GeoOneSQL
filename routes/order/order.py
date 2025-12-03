@@ -93,67 +93,7 @@ def get_order():
         return jsonify({"message": "Internal server error."}), 500
     
 
-# @order_bp.route("/order", methods=["GET"])
-# def get_order():
-#     try:
-#         # Fetch and validate query parameters
-#         order_id = request.args.get("order_id")
-#         user_id = request.args.get("user_id")
-#         # if not (order_id and order_id.isdigit() and user_id and user_id.isdigit()):
-#         #     return jsonify({"message": "Missing or invalid query parameters."}), 400
-#         # SQL query to fetch order details
-#         query = """
-#             SELECT  
-#                 A.SlNo,
-#                 A.OrderType,
-#                 A.LocationID,
-#                 A.CustCode,
-#                 A.NetAmount,
-#                 A.MakingTime,
-#                 A.MakerId,
-#                 C.Location AS LocationName,
-#                 B.CardName AS CustomerName,
-#                 (
-#                     SELECT 
-#                         D.ProductCode,
-#                         D.ProdName,
-#                         D.Qty,
-#                         D.DiscountPerc,
-#                         D.LineTotal
-#                     FROM 
-#                         TBL_SalesOrderProductDetails AS D
-#                     WHERE 
-#                         D.SOID = A.SlNo
-#                     FOR JSON PATH
-#                 ) AS Products
-#             FROM 
-#                 TBL_SalesOrderDetails AS A
-#             LEFT JOIN CustomerMaster_M_Tbl AS B ON A.CustCode = B.CardCode
-#             LEFT JOIN LocationMaster_M_Tbl AS C ON A.LocationID = C.LocationId
-#             LEFT JOIN TBL_Users AS D ON D.UserID = A.MakerId
-#             WHERE 
-#                 A.Status IN ('N' ,'P') AND A.SlNo = ? AND D.Usr_Name = ?
-#             FOR JSON PATH, INCLUDE_NULL_VALUES;
-#         """
-#         params = (order_id, user_id)
-#         # Execute the query and fetch the result
-#         orderdetails = ms_query_db(query, params)
-#         # Process the result
-#         if orderdetails:
-#             json_key = "JSON_F52E2B61-18A1-11d1-B105-00805F49916B"
-#             raw_data = json.loads(orderdetails[0].get(json_key, "[]"))
-#             formatted_data = (
-#                 raw_data[0] if isinstance(raw_data, list) and raw_data else {}
-#             )
-#         else:
-#             formatted_data = {}
-#         # check formatted_data is empty or not
-#         if not formatted_data:
-#             return jsonify({"message": "No data found."}), 404
-#         return jsonify(formatted_data), 200
-#     except Exception as e:
-#         print(f"Error: {e}")
-#         return jsonify({"message": "Internal server error."}), 500
+
     
 @order_bp.route("/orderApprove", methods=["POST"])
 def approve_order():
@@ -624,6 +564,7 @@ def orders_to_invoice():
                 S.DocDate AS OrderDate,
                 B.CustomerId,
                 B.CustomerName,
+                A.ItemName,
                 S.orderType,
                 SUM(CASE 
                     WHEN I.UOM IN (1,4)
@@ -678,7 +619,8 @@ def orders_to_invoice():
                 S.NOrderType,
                 B.InvoiceNo,
                 B.InvoiceDate,
-                L.Location
+                L.Location,
+                A.ItemName
         """
         # print(query)
         orders = ms_query_db(query, params, fetch_one=False)
@@ -686,10 +628,118 @@ def orders_to_invoice():
         return jsonify(orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+    
 
+@order_bp.route("/partial_invoice", methods=["GET"])
+def partial_invoice():
+    try:
+        cardcode = request.args.get("cardcode")
+        fromdate = request.args.get("fromdate")
+        todate = request.args.get("todate")
+        associated = request.args.get("associated")
 
+        # Base query
+        query = """
+            SELECT 
+                SOH.SalesOrderNo,
+                FORMAT(CONVERT(DATE, SOH.CreatedDateTime, 103),'dd-MM-yyyy')  AS OrderDate,
+                SOH.CustomerCode,
+                SOH.CustomerName,
+                LOC.Location,
+                ITM.Description AS ITEM,
 
+                SUM(
+                    CASE 
+                        WHEN ITM.UOM IN (1, 4) THEN 
+                            CAST((CAST(SOL.Quantity AS numeric(10,3)) * CAST(ITM.altuntcom1 AS numeric(10,3))) / 1000 AS numeric(10,2))
+                        WHEN ITM.UOM = 3 THEN 
+                            CAST(CAST(SOL.Quantity AS numeric(10,3)) / 1000 AS numeric(10,2))
+                        ELSE 0
+                    END
+                ) AS OrderQuantity,
 
+                SUM(
+                    CASE 
+                        WHEN ITM.UOM IN (1, 4) THEN 
+                            CAST((CAST(INL.Quantity AS numeric(10,3)) * CAST(ITM.altuntcom1 AS numeric(10,3))) / 1000 AS numeric(10,2))
+                        WHEN ITM.UOM = 3 THEN 
+                            CAST(CAST(INL.Quantity AS numeric(10,3)) / 1000 AS numeric(10,2))
+                        ELSE 0
+                    END
+                ) AS InvoicedQuantity
 
+            FROM SAP_SalesOrder_M_Tbl SOH
+            INNER JOIN SAP_SalesOrderLine_M_Tbl SOL 
+                ON SOH.DocEntry = SOL.DocEntry
+            INNER JOIN SAP_AR_Invoice_Line_Details_M_Tbl INL 
+                ON INL.SalesOrderDocEntryNo = SOL.DocEntry 
+                AND SOL.ItemCode = INL.ItemCode 
+                AND SOL.Quantity <> INL.Quantity 
+            INNER JOIN ItemMaster_M_Tbl ITM 
+                ON SOL.ItemCode = ITM.ItemCode
+            INNER JOIN LocationMaster_M_Tbl LOC
+                ON SOL.LocCode = LOC.LocationId
+        """
 
+        conditions = []
+        params = []
 
+        # Mandatory
+        conditions.append("ITM.UOM NOT IN (3)")
+
+        # Date filter
+        if fromdate and todate:
+            conditions.append("CONVERT(date, SOH.CreatedDateTime, 103) BETWEEN ? AND ?")
+            params.extend([fromdate, todate])
+
+        # Associated group filter
+        if associated == "Georoof":
+            conditions.append("""
+                ITM.MainGroup IN (
+                    'Georoof Roofing Sheet', 'Geoclad Cladding Sheet',
+                    'Posco Cladding Sheet', 'Posco Roofing Sheet'
+                )
+            """)
+
+        elif associated == "AMNS":
+            conditions.append("""
+                ITM.MainGroup IN (
+                    'AMNS Cladding Sheet', 'AMNS Roofing Sheet'
+                )
+            """)
+
+        elif associated == "both":
+            conditions.append("""
+                ITM.MainGroup IN (
+                    'Georoof Roofing Sheet', 'Geoclad Cladding Sheet',
+                    'Posco Cladding Sheet', 'Posco Roofing Sheet',
+                    'AMNS Cladding Sheet', 'AMNS Roofing Sheet'
+                )
+            """)
+
+        # Customer filter
+        if cardcode:
+            conditions.append("SOH.CustomerCode = ?")
+            params.append(cardcode)
+
+        # Apply WHERE clause
+        if conditions:
+            query += " WHERE " + " AND ".join([c.strip() for c in conditions])
+
+        # GROUP BY section (fixed indentation + spacing)
+        query += """
+            GROUP BY 
+                SOH.SalesOrderNo,
+                SOH.CustomerCode,
+                SOH.CustomerName,
+                ITM.Description,
+                FORMAT(CONVERT(DATE, SOH.CreatedDateTime, 103),'dd-MM-yyyy'),
+                LOC.Location
+        """
+
+        # Execute query
+        orders = ms_query_db(query, params, fetch_one=False)
+        return jsonify(orders), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500

@@ -1,5 +1,6 @@
 from setting.db_connections import ms_query_db
 from flask import Blueprint, request, jsonify
+from .customer import fetch_employee_territory
   # type: ignore
 # import pyodbc
 
@@ -7,12 +8,16 @@ ms_reports_bp = Blueprint("ms_reports", __name__)
 
 
 
+@ms_reports_bp.route("/approved_open_orders/<int:employee_id>", methods=["GET"])
 @ms_reports_bp.route("/approved_open_orders", methods=["GET"])
-def get_approved_orders():
+def get_approved_orders(employee_id = None):
     try:
         territory_id = request.args.get("territory_id")
         created_date = request.args.get("created_date")
         associated = request.args.get("associated")
+        cardcode = request.args.get("cardcode")
+        # if not employee_id and not territory_id:
+        #     return jsonify({"error": "Employee ID or Territory ID is required"}), 400
 
         query = """
     				SELECT 
@@ -44,7 +49,7 @@ def get_approved_orders():
                         S.SalesOrderStatus AS [Status]
 				FROM SAP_SalesOrderLine_M_Tbl SL
 					INNER JOIN SAP_SalesOrder_M_Tbl S ON S.DocEntry = SL.DocEntry
-					INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode
+					INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode AND E.Territory <> '42'
 					INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode  AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet', 'AMNS Cladding Sheet', 'AMNS Roofing Sheet')
 					INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
 					INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
@@ -70,6 +75,16 @@ def get_approved_orders():
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
 
+        if cardcode:
+            conditions.append("S.CustomerCode = ?")
+            params.append(cardcode)
+
+        if employee_id:
+            territories = fetch_employee_territory(employee_id)  # assume this returns a list
+            if territories:  # avoid empty IN ()
+                conditions.append(f"E.Territory IN ({','.join(['?'] * len(territories))})")
+                params.extend(territories)  # <-- extend instead of append
+
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
@@ -79,12 +94,14 @@ def get_approved_orders():
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
 
+@ms_reports_bp.route("/approved_open_orders_summary/<int:employee_id>", methods=["GET"])
 @ms_reports_bp.route("/approved_open_orders_summary", methods=["GET"])
-def approved_open_orders_summary():
+def approved_open_orders_summary(employee_id = None):
     try:
         territory_id = request.args.get("territory_id")
         created_date = request.args.get("created_date")
         associated = request.args.get("associated")
+        cardcode = request.args.get("cardcode")
         query = """
 
                     SELECT 
@@ -111,7 +128,7 @@ def approved_open_orders_summary():
 
                     FROM SAP_SalesOrderLine_M_Tbl SL
                         INNER JOIN SAP_SalesOrder_M_Tbl S ON S.DocEntry = SL.DocEntry
-                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode
+                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = S.CustomerCode AND E.Territory <> '42'
                         INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = SL.ItemCode  AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet', 'AMNS Cladding Sheet', 'AMNS Roofing Sheet')
                         INNER JOIN TBL_SalesOrderDetails SD ON S.EbizOrderId = SD.SlNo
                         INNER JOIN TBL_Users U ON U.UserID = SD.MakerID
@@ -128,6 +145,10 @@ def approved_open_orders_summary():
             conditions.append("E.Territory = ?")
             params.append(territory_id)
 
+        if cardcode:
+            conditions.append("S.CustomerCode = ?")
+            params.append(cardcode)
+
         if created_date:
             conditions.append("convert(date, S.DocDate, 103)= ?")
             params.append(created_date)
@@ -135,6 +156,16 @@ def approved_open_orders_summary():
         if associated in ("AMNS", "Georoof"):
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
+
+        if employee_id:
+            territories = fetch_employee_territory(
+                employee_id
+            )  # assume this returns a list
+            if territories:  # avoid empty IN ()
+                conditions.append(
+                    f"E.Territory IN ({','.join(['?'] * len(territories))})"
+                )
+                params.extend(territories)  # <-- extend instead of append
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -149,8 +180,9 @@ def approved_open_orders_summary():
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
 
+@ms_reports_bp.route("/draft_orders/<int:employee_id>", methods=["GET"])
 @ms_reports_bp.route("/draft_orders", methods=["GET"])
-def draft_orders():
+def draft_orders(employee_id = None):
     try:
         # sales_person = request.args.get("sales_person")
         status = request.args.get("status")
@@ -158,6 +190,7 @@ def draft_orders():
         territory_id = request.args.get("territory_id")
         approved_date = request.args.get("approved_date")
         associated = request.args.get("associated")
+        cardcode = request.args.get("cardcode")
         query = """
                     SELECT 
                         B.SlNo [Order_No],
@@ -187,7 +220,7 @@ def draft_orders():
                         INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
                         INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode  AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet', 'AMNS Cladding Sheet', 'AMNS Roofing Sheet')
                         INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
-                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
+                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode AND  E.Territory <> '42'
                         INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
                         INNER JOIN TBL_Users U ON U.UserID=A.MakerID
                         INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
@@ -201,6 +234,20 @@ def draft_orders():
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
 
+        if cardcode:
+            conditions.append("B.CustCode = ?")
+            params.append(cardcode)
+
+
+        if employee_id:
+            territories = fetch_employee_territory(
+                employee_id
+            )  # assume this returns a list
+            if territories:  # avoid empty IN ()
+                conditions.append(
+                    f"E.Territory IN ({','.join(['?'] * len(territories))})"
+                )
+                params.extend(territories)  # <-- extend instead of append
 
 
 
@@ -239,7 +286,8 @@ def draft_orders():
 
 
 @ms_reports_bp.route("/draft_orders_summary", methods=["GET"])
-def draft_orders_summary():
+@ms_reports_bp.route("/draft_orders_summary/<int:employee_id>", methods=["GET"])
+def draft_orders_summary(employee_id = None):
     try:
         # sales_person = request.args.get("sales_person")
         status = request.args.get("status")
@@ -247,6 +295,7 @@ def draft_orders_summary():
         territory_id = request.args.get("territory_id")
         approved_date = request.args.get("approved_date")
         associated = request.args.get("associated")
+        cardcode = request.args.get("cardcode")
         query = """
                    SELECT 
 
@@ -263,7 +312,7 @@ def draft_orders_summary():
                         INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
                         INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode  AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet', 'AMNS Cladding Sheet', 'AMNS Roofing Sheet')
                         INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
-                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
+                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode AND  E.Territory <> '42'
                         INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
                         INNER JOIN TBL_Users U ON U.UserID=A.MakerID
                         INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
@@ -272,11 +321,19 @@ def draft_orders_summary():
         conditions = []
         params = []
 
-        # if user_id:
-        #     conditions.append(
-        #         "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')"
-        #     )
-        #     params.append(user_id)
+        if employee_id:
+            territories = fetch_employee_territory(
+                employee_id
+            )  # assume this returns a list
+            if territories:  # avoid empty IN ()
+                conditions.append(
+                    f"E.Territory IN ({','.join(['?'] * len(territories))})"
+                )
+                params.extend(territories)  # <-- extend instead of append
+
+        if cardcode:
+            conditions.append("B.CustCode = ?")
+            params.append(cardcode)
 
         if status:
             if status == "open":
