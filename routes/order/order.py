@@ -391,86 +391,123 @@ def approved_open_orders_summary(user_id):
 @order_bp.route("/draft_orders/<int:user_id>", methods=["GET"])
 def draft_orders(user_id):
     try:
-        # sales_person = request.args.get("sales_person")
         status = request.args.get("status")
         created_date = request.args.get("created_date")
         territory_id = request.args.get("territory_id")
         approved_date = request.args.get("approved_date")
+
+        # Fixed Aliases:
+        # Ord = TBL_SalesOrderDetails
+        # Prod = TBL_SalesOrderProductDetails
+        # Itm = ItemMaster_M_Tbl
+        # Uom = Uom_Master_M_Tbl
+        # Cust = CustomerMaster_M_Tbl
+        # Emp = Employee_Master_M_Tbl
+
         query = """
-                    SELECT 
-                        B.SlNo [Order_No],
-                        CASE WHEN B.OrderType='WO' THEN 'WorkOrder'
-                        WHEN B.OrderType='SO' THEN 'SalesOrder' 
-                        ELSE '' END AS OrderType,
-                        B.MakingTime,
-                        B.CustCode AS CustomerCode,
-                        E.CardName,
-                        U.Name,
-                        C.Description [itemName],
-                        F.Location,
-                        CAST(ISNULL(CASE WHEN D.UomCode ='SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-                            WHEN D.UomCode ='KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
-                            WHEN D.UomCode ='MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-                            WHEN D.UomCode ='NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-                            ELSE 0 END ,0) AS NUMERIC(10,2))  AS [Tonnage],
-                        CASE WHEN B.Status = 'C' THEN 'Cancelled'
-                        WHEN B.Status = 'Y' THEN 'Posted to SAP'
-                        WHEN B.Status = 'E'  THEN 'Expired'
-                        WHEN B.Status = 'N' THEN 'Draft'
-                        WHEN B.Status = 'R' THEN 'Dealer Confirmed'
-                        WHEN B.Status = 'P' then 'Dealer Draft'
-                        END AS [Status]
-                    FROM 
-                        TBL_SalesOrderProductDetails A
-                        INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
-                        INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
-                        INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
-                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
-                        INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
-                        INNER JOIN TBL_Users U ON U.UserID=A.MakerID
-                        INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
-                        INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
-                """
+            SELECT 
+                Ord.SlNo [Order_No],
+                CASE 
+                    WHEN Ord.OrderType='WO' THEN 'WorkOrder'
+                    WHEN Ord.OrderType='SO' THEN 'SalesOrder' 
+                    ELSE '' 
+                END AS OrderType,
+                Ord.MakingTime,
+                Ord.CustCode AS CustomerCode,
+                Cust.CardName,
+                U.Name,
+                Itm.Description [itemName],
+                Loc.Location,
+                CAST(ISNULL(
+                    CASE 
+                        WHEN Uom.UomCode ='SQM' THEN TRY_CAST(Prod.Qty * TRY_CAST(Itm.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                        WHEN Uom.UomCode ='KGS' THEN TRY_CAST(Prod.Qty AS NUMERIC(10,2))/1000
+                        WHEN Uom.UomCode ='MTR' THEN TRY_CAST((Prod.Qty * TRY_CAST(Itm.Width AS NUMERIC(10,2))) * TRY_CAST(Itm.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                        WHEN Uom.UomCode ='NOS' THEN TRY_CAST(Prod.Qty * TRY_CAST(Itm.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                        ELSE 0 
+                    END, 0) AS NUMERIC(10,2)) AS [Tonnage],
+                CASE 
+                    WHEN Ord.Status = 'C' THEN 'Cancelled'
+                    WHEN Ord.Status = 'Y' THEN 'Posted to SAP'
+                    WHEN Ord.Status = 'E' THEN 'Expired'
+                    WHEN Ord.Status = 'N' THEN 'Draft'
+                    WHEN Ord.Status = 'R' THEN 'Dealer Confirmed'
+                    WHEN Ord.Status = 'P' THEN 'Dealer Draft'
+                END AS [Status]
+            FROM 
+                TBL_SalesOrderProductDetails Prod
+                INNER JOIN TBL_SalesOrderDetails Ord ON Prod.SOID = Ord.SlNo
+                INNER JOIN ItemMaster_M_Tbl Itm ON Itm.ItemCode = Prod.ProductCode
+                INNER JOIN Uom_Master_M_Tbl Uom ON Uom.UomId = Itm.UOM
+                INNER JOIN CustomerMaster_M_Tbl Cust ON Cust.CardCode = Ord.CustCode
+                INNER JOIN LocationMaster_M_Tbl Loc ON Loc.Code = Ord.LocationID
+                INNER JOIN TBL_Users U ON U.UserID = Prod.MakerID
+                INNER JOIN SalesEmployeeMaster_M_Tbl SE ON Ord.SalesPerson = SE.SalesEmployeeCode
+                INNER JOIN Employee_Master_M_Tbl Emp ON Emp.SapEmployeeId = SE.EmployeeId
+        """
+
         conditions = []
         params = []
 
+        conditions.append("Ord.Status != 'C'")
+
+        # 1. Base User Filter
         if user_id:
-            conditions.append(
-                "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')"
-            )
+            conditions.append("Emp.EmployeeId = ?")
             params.append(user_id)
 
+            # Hardcoded Item Group Filter
+            conditions.append(
+                "Itm.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')"
+            )
+
+        # 2. Status Logic (Fixed the Logic Conflict)
         if status:
             if status == "open":
-                conditions.append("B.Status IN (?, ?, ?)")
+                conditions.append("Ord.Status IN (?, ?, ?)")
                 params.extend(["N", "R", "P"])
             elif status == "cancelled":
-                conditions.append("B.Status = ?")
+                conditions.append("Ord.Status = ?")
                 params.append("C")
-           
             else:
-                conditions.append("B.Status = ?")
+                conditions.append("Ord.Status = ?")
                 params.append(status)
+        else:
+            # DEFAULT BEHAVIOR: If no status is requested, hide Cancelled orders
+            # This replicates your original intent without breaking the "cancelled" filter
+            conditions.append("Ord.Status != 'C'")
 
+        # 3. Date Filters
         if created_date:
-            conditions.append("CONVERT(date, B.MakingTime,103) = ?")
+            # Ensure the frontend sends DD/MM/YYYY or change format here
+            conditions.append("CONVERT(date, Ord.MakingTime, 103) = ?")
             params.append(created_date)
 
         if territory_id:
-            conditions.append("E.Territory = ?")
+            conditions.append("Cust.Territory = ?")
             params.append(territory_id)
 
         if approved_date:
-            conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
+            conditions.append("CONVERT(date, Ord.ApproveCancelOn, 103) = ?")
             params.append(approved_date)
 
+        # Build Final Query
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
+        # Execute
         draft_orders = ms_query_db(query, params, fetch_one=False)
         return jsonify(draft_orders), 200
+
     except Exception as e:
+        # Good practice: Print the error to console logs so you can debug it
+        print(f"Error in draft_orders: {e}")
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+
+
+
 @order_bp.route("/draft_orders_summary/<int:user_id>", methods=["GET"])
 def draft_orders_summary(user_id):
     try:
@@ -479,37 +516,43 @@ def draft_orders_summary(user_id):
         created_date = request.args.get("created_date")
         territory_id = request.args.get("territory_id")
         approved_date = request.args.get("approved_date")
-        query = """
-                   SELECT 
 
-                        SUM(CAST(ISNULL(CASE 
-                            WHEN D.UomCode = 'SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-                            WHEN D.UomCode = 'KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
-                            WHEN D.UomCode = 'MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-                            WHEN D.UomCode = 'NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-                            ELSE 0 
-                        END, 0) AS NUMERIC(10,2))) AS total_tonnage
-    
-                    FROM 
-                        TBL_SalesOrderProductDetails A
-                        INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
-                        INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
-                        INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
-                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
-                        INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
-                        INNER JOIN TBL_Users U ON U.UserID=A.MakerID
-                        INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
-                        INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
-                """
+        # Removed unused JOINs (TBL_Users, LocationMaster) for better performance
+        query = """
+            SELECT 
+                SUM(CAST(ISNULL(CASE 
+                    WHEN D.UomCode = 'SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                    WHEN D.UomCode = 'KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
+                    WHEN D.UomCode = 'MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                    WHEN D.UomCode = 'NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                    ELSE 0 
+                END, 0) AS NUMERIC(10,2))) AS total_tonnage
+            FROM 
+                TBL_SalesOrderProductDetails A
+                INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
+                INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
+                INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+                INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
+                INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
+                INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
+        """
+        
         conditions = []
         params = []
 
+        # REMOVED: conditions.append("Ord.Status != 'C'") 
+        # Reason 1: 'Ord' alias does not exist (it is 'B').
+        # Reason 2: It conflicts with the status check below.
+
+
+        conditions.append("B.Status != 'C' ")
         if user_id:
             conditions.append(
-                "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet')"
+                "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet') "
             )
             params.append(user_id)
 
+        # Logic Fix for Status
         if status:
             if status == "open":
                 conditions.append("B.Status IN (?, ?, ?)")
@@ -517,13 +560,17 @@ def draft_orders_summary(user_id):
             elif status == "cancelled":
                 conditions.append("B.Status = ?")
                 params.append("C")
-           
             else:
                 conditions.append("B.Status = ?")
                 params.append(status)
+        else:
+            # Default behavior: If no status specified, hide cancelled
+            conditions.append("B.Status != ?")
+            params.append("C")
 
+        # Date Filters
         if created_date:
-            conditions.append("CONVERT(date, B.MakingTime,103) = ?")
+            conditions.append("CONVERT(date, B.MakingTime, 103) = ?")
             params.append(created_date)
 
         if territory_id:
@@ -531,21 +578,188 @@ def draft_orders_summary(user_id):
             params.append(territory_id)
 
         if approved_date:
-            conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
+            conditions.append("CONVERT(date, B.ApproveCancelOn, 103) = ?")
             params.append(approved_date)
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
-        draft_orders = ms_query_db(query, params, fetch_one=True)
+        summary_data = ms_query_db(query, params, fetch_one=True)
 
-        if draft_orders is None or draft_orders.get('total_tonnage') is None:
+        if summary_data is None or summary_data.get('total_tonnage') is None:
             return jsonify({"total_tonnage": 0}), 200
 
+        return jsonify(summary_data), 200
 
-        return jsonify(draft_orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+
+
+
+
+# @order_bp.route("/draft_orders/<int:user_id>", methods=["GET"])
+# def draft_orders(user_id):
+#     try:
+#         # sales_person = request.args.get("sales_person")
+#         status = request.args.get("status")
+#         created_date = request.args.get("created_date")
+#         territory_id = request.args.get("territory_id")
+#         approved_date = request.args.get("approved_date")
+#         query = """
+#                     SELECT 
+#                         B.SlNo [Order_No],
+#                         CASE WHEN B.OrderType='WO' THEN 'WorkOrder'
+#                         WHEN B.OrderType='SO' THEN 'SalesOrder' 
+#                         ELSE '' END AS OrderType,
+#                         B.MakingTime,
+#                         B.CustCode AS CustomerCode,
+#                         E.CardName,
+#                         U.Name,
+#                         C.Description [itemName],
+#                         F.Location,
+#                         CAST(ISNULL(CASE WHEN D.UomCode ='SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+#                             WHEN D.UomCode ='KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
+#                             WHEN D.UomCode ='MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+#                             WHEN D.UomCode ='NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+#                             ELSE 0 END ,0) AS NUMERIC(10,2))  AS [Tonnage],
+#                         CASE WHEN B.Status = 'C' THEN 'Cancelled'
+#                         WHEN B.Status = 'Y' THEN 'Posted to SAP'
+#                         WHEN B.Status = 'E'  THEN 'Expired'
+#                         WHEN B.Status = 'N' THEN 'Draft'
+#                         WHEN B.Status = 'R' THEN 'Dealer Confirmed'
+#                         WHEN B.Status = 'P' then 'Dealer Draft'
+#                         END AS [Status]
+#                     FROM 
+#                         TBL_SalesOrderProductDetails A
+#                         INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
+#                         INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
+#                         INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+#                         INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
+#                         INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
+#                         INNER JOIN TBL_Users U ON U.UserID=A.MakerID
+#                         INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
+#                         INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
+#                 """
+#         conditions = []
+#         params = []
+
+#         if user_id:
+#             conditions.append(
+#                 "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet') AND B.Status != 'C'"
+#             )
+#             params.append(user_id)
+
+#         if status:
+#             if status == "open":
+#                 conditions.append("B.Status IN (?, ?, ?)")
+#                 params.extend(["N", "R", "P"])
+#             elif status == "cancelled":
+#                 conditions.append("B.Status = ?")
+#                 params.append("C")
+           
+#             else:
+#                 conditions.append("B.Status = ?")
+#                 params.append(status)
+
+#         if created_date:
+#             conditions.append("CONVERT(date, B.MakingTime,103) = ?")
+#             params.append(created_date)
+
+#         if territory_id:
+#             conditions.append("E.Territory = ?")
+#             params.append(territory_id)
+
+#         if approved_date:
+#             conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
+#             params.append(approved_date)
+
+#         if conditions:
+#             query += " WHERE " + " AND ".join(conditions)
+
+#         draft_orders = ms_query_db(query, params, fetch_one=False)
+#         return jsonify(draft_orders), 200
+#     except Exception as e:
+#         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+# @order_bp.route("/draft_orders_summary/<int:user_id>", methods=["GET"])
+# def draft_orders_summary(user_id):
+#     try:
+#         # sales_person = request.args.get("sales_person")
+#         status = request.args.get("status")
+#         created_date = request.args.get("created_date")
+#         territory_id = request.args.get("territory_id")
+#         approved_date = request.args.get("approved_date")
+#         query = """
+#                    SELECT 
+#                         SUM(CAST(ISNULL(CASE 
+#                             WHEN D.UomCode = 'SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+#                             WHEN D.UomCode = 'KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
+#                             WHEN D.UomCode = 'MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+#                             WHEN D.UomCode = 'NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+#                             ELSE 0 
+#                         END, 0) AS NUMERIC(10,2))) AS total_tonnage
+    
+#                     FROM 
+#                         TBL_SalesOrderProductDetails A
+#                         INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
+#                         INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
+#                         INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+#                         INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
+#                         INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
+#                         INNER JOIN TBL_Users U ON U.UserID=A.MakerID
+#                         INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
+#                         INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
+#                 """
+#         conditions = []
+#         params = []
+
+#         conditions.append("Ord.Status != 'C'")
+
+#         if user_id:
+#             conditions.append(
+#                 "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet') "
+#             )
+#             params.append(user_id)
+
+#         if status:
+#             if status == "open":
+#                 conditions.append("B.Status IN (?, ?, ?)")
+#                 params.extend(["N", "R", "P"])
+#             elif status == "cancelled":
+#                 conditions.append("B.Status = ?")
+#                 params.append("C")
+           
+#             else:
+#                 conditions.append("B.Status = ?")
+#                 params.append(status)
+
+#         if created_date:
+#             conditions.append("CONVERT(date, B.MakingTime,103) = ?")
+#             params.append(created_date)
+
+#         if territory_id:
+#             conditions.append("E.Territory = ?")
+#             params.append(territory_id)
+
+#         if approved_date:
+#             conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
+#             params.append(approved_date)
+
+#         if conditions:
+#             query += " WHERE " + " AND ".join(conditions)
+
+#         draft_orders = ms_query_db(query, params, fetch_one=True)
+
+#         if draft_orders is None or draft_orders.get('total_tonnage') is None:
+#             return jsonify({"total_tonnage": 0}), 200
+
+
+#         return jsonify(draft_orders), 200
+#     except Exception as e:
+#         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
     
 
 

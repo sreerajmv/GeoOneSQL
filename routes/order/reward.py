@@ -45,7 +45,7 @@ def party_order_expiry():
                 C.CardName,
                 InventoryNo AS OrderNo,
                 BT.Descript AS Territory,
-                InventoryDate AS OrderDate,
+                FORMAT(CONVERT(DATE, InventoryDate, 103),'dd-MM-yyyy')  AS OrderDate,
                 I.Description AS Item,
                 Quantity
             FROM DealerPointStock_T_Tbl D

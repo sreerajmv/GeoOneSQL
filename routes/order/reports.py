@@ -141,6 +141,8 @@ def approved_open_orders_summary(employee_id = None):
         conditions = []
         params = []
 
+        # conditions.append("B.Status != 'C' ")
+
         if territory_id:
             conditions.append("E.Territory = ?")
             params.append(territory_id)
@@ -320,6 +322,8 @@ def draft_orders_summary(employee_id = None):
                 """
         conditions = []
         params = []
+
+        conditions.append("B.Status != 'C' ")
 
         if employee_id:
             territories = fetch_employee_territory(
