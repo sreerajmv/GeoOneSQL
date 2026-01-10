@@ -131,21 +131,6 @@ def approve_order():
 
 
 
-        # conn.commit()
-        
-        # # Close the cursor and connection
-        # cursor.close()
-        # conn.close()
-        # print(result)
-        # if result:
-        #     first_tuple = result[0]
-        #     status = first_tuple[0]
-        #     message = first_tuple[1]
-        #     return jsonify({"status": status, "message": message}), 200
-        # else:
-        #     return jsonify({"message": "No data found."}), 404
-
-
     except Exception as e:
         # Rollback in case of error
         if "conn" in locals():
