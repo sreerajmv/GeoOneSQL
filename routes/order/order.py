@@ -109,18 +109,41 @@ def approve_order():
         cursor.execute(query, params)
         result = cursor.fetchall()
 
-        conn.commit()
-        
-        # Close the cursor and connection
-        cursor.close()
-        conn.close()
+        # Default values
+        status = 0
+        message = "Unknown error"
+
+
         if result:
             first_tuple = result[0]
             status = first_tuple[0]
             message = first_tuple[1]
+
+
+        if status == 1: 
+            conn.commit()
             return jsonify({"status": status, "message": message}), 200
         else:
-            return jsonify({"message": "No data found."}), 404
+            # If SP failed, Rollback (just to be safe) and return the error
+            conn.rollback() 
+            # print(f"SP Failed with: {message}") # This will help you see the error in logs
+            return jsonify({"status": status, "message": message}),  500
+
+
+
+        # conn.commit()
+        
+        # # Close the cursor and connection
+        # cursor.close()
+        # conn.close()
+        # print(result)
+        # if result:
+        #     first_tuple = result[0]
+        #     status = first_tuple[0]
+        #     message = first_tuple[1]
+        #     return jsonify({"status": status, "message": message}), 200
+        # else:
+        #     return jsonify({"message": "No data found."}), 404
 
 
     except Exception as e:
@@ -163,7 +186,15 @@ def outstanding(customer_code):
                 """
         params = (customer_code,)
         outstanding_details = ms_query_db(query, params, fetch_one=False)
-        return jsonify(outstanding_details), 200
+
+        outstanding_details = ms_query_db(query, params, fetch_one=False)
+        
+        # Check if ms_query_db returned None (error case)
+        if outstanding_details is None:
+            return jsonify({"message": "Database query failed"}), 500
+            
+        # Return empty array if no results
+        return jsonify(outstanding_details or []), 200
 
     except Exception as e:  
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500

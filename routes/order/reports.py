@@ -231,6 +231,7 @@ def draft_orders(employee_id = None):
         conditions = []
         params = []
 
+        conditions.append("B.Status != 'C'")
 
         if associated in ("AMNS", "Georoof"):
             conditions.append("SE.U_Associated = ?")
