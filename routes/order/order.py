@@ -213,6 +213,7 @@ def open_order(customer_code):
             "DraftAmount": float(open_order["DraftAmount"]),
             "current_balance": float(balance_info.get("AccountBalance")),
             "credit_limit": float(balance_info.get("CreditBalance")),
+            "CDExemption": open_order["CDExemption"],
         }
         return jsonify(response), 200
     except Exception as e:  
