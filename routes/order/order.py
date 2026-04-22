@@ -615,171 +615,6 @@ def draft_orders_summary(user_id):
 
 
 
-
-# @order_bp.route("/draft_orders/<int:user_id>", methods=["GET"])
-# def draft_orders(user_id):
-#     try:
-#         # sales_person = request.args.get("sales_person")
-#         status = request.args.get("status")
-#         created_date = request.args.get("created_date")
-#         territory_id = request.args.get("territory_id")
-#         approved_date = request.args.get("approved_date")
-#         query = """
-#                     SELECT 
-#                         B.SlNo [Order_No],
-#                         CASE WHEN B.OrderType='WO' THEN 'WorkOrder'
-#                         WHEN B.OrderType='SO' THEN 'SalesOrder' 
-#                         ELSE '' END AS OrderType,
-#                         B.MakingTime,
-#                         B.CustCode AS CustomerCode,
-#                         E.CardName,
-#                         U.Name,
-#                         C.Description [itemName],
-#                         F.Location,
-#                         CAST(ISNULL(CASE WHEN D.UomCode ='SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-#                             WHEN D.UomCode ='KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
-#                             WHEN D.UomCode ='MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-#                             WHEN D.UomCode ='NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-#                             ELSE 0 END ,0) AS NUMERIC(10,2))  AS [Tonnage],
-#                         CASE WHEN B.Status = 'C' THEN 'Cancelled'
-#                         WHEN B.Status = 'Y' THEN 'Posted to SAP'
-#                         WHEN B.Status = 'E'  THEN 'Expired'
-#                         WHEN B.Status = 'N' THEN 'Draft'
-#                         WHEN B.Status = 'R' THEN 'Dealer Confirmed'
-#                         WHEN B.Status = 'P' then 'Dealer Draft'
-#                         END AS [Status]
-#                     FROM 
-#                         TBL_SalesOrderProductDetails A
-#                         INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
-#                         INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
-#                         INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
-#                         INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
-#                         INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
-#                         INNER JOIN TBL_Users U ON U.UserID=A.MakerID
-#                         INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
-#                         INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
-#                 """
-#         conditions = []
-#         params = []
-
-#         if user_id:
-#             conditions.append(
-#                 "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet') AND B.Status != 'C'"
-#             )
-#             params.append(user_id)
-
-#         if status:
-#             if status == "open":
-#                 conditions.append("B.Status IN (?, ?, ?)")
-#                 params.extend(["N", "R", "P"])
-#             elif status == "cancelled":
-#                 conditions.append("B.Status = ?")
-#                 params.append("C")
-           
-#             else:
-#                 conditions.append("B.Status = ?")
-#                 params.append(status)
-
-#         if created_date:
-#             conditions.append("CONVERT(date, B.MakingTime,103) = ?")
-#             params.append(created_date)
-
-#         if territory_id:
-#             conditions.append("E.Territory = ?")
-#             params.append(territory_id)
-
-#         if approved_date:
-#             conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
-#             params.append(approved_date)
-
-#         if conditions:
-#             query += " WHERE " + " AND ".join(conditions)
-
-#         draft_orders = ms_query_db(query, params, fetch_one=False)
-#         return jsonify(draft_orders), 200
-#     except Exception as e:
-#         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
-
-
-# @order_bp.route("/draft_orders_summary/<int:user_id>", methods=["GET"])
-# def draft_orders_summary(user_id):
-#     try:
-#         # sales_person = request.args.get("sales_person")
-#         status = request.args.get("status")
-#         created_date = request.args.get("created_date")
-#         territory_id = request.args.get("territory_id")
-#         approved_date = request.args.get("approved_date")
-#         query = """
-#                    SELECT 
-#                         SUM(CAST(ISNULL(CASE 
-#                             WHEN D.UomCode = 'SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-#                             WHEN D.UomCode = 'KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
-#                             WHEN D.UomCode = 'MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-#                             WHEN D.UomCode = 'NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
-#                             ELSE 0 
-#                         END, 0) AS NUMERIC(10,2))) AS total_tonnage
-    
-#                     FROM 
-#                         TBL_SalesOrderProductDetails A
-#                         INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
-#                         INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode
-#                         INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
-#                         INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode
-#                         INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
-#                         INNER JOIN TBL_Users U ON U.UserID=A.MakerID
-#                         INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
-#                         INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
-#                 """
-#         conditions = []
-#         params = []
-
-#         conditions.append("Ord.Status != 'C'")
-
-#         if user_id:
-#             conditions.append(
-#                 "EM.EmployeeId = ? AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet') "
-#             )
-#             params.append(user_id)
-
-#         if status:
-#             if status == "open":
-#                 conditions.append("B.Status IN (?, ?, ?)")
-#                 params.extend(["N", "R", "P"])
-#             elif status == "cancelled":
-#                 conditions.append("B.Status = ?")
-#                 params.append("C")
-           
-#             else:
-#                 conditions.append("B.Status = ?")
-#                 params.append(status)
-
-#         if created_date:
-#             conditions.append("CONVERT(date, B.MakingTime,103) = ?")
-#             params.append(created_date)
-
-#         if territory_id:
-#             conditions.append("E.Territory = ?")
-#             params.append(territory_id)
-
-#         if approved_date:
-#             conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
-#             params.append(approved_date)
-
-#         if conditions:
-#             query += " WHERE " + " AND ".join(conditions)
-
-#         draft_orders = ms_query_db(query, params, fetch_one=True)
-
-#         if draft_orders is None or draft_orders.get('total_tonnage') is None:
-#             return jsonify({"total_tonnage": 0}), 200
-
-
-#         return jsonify(draft_orders), 200
-#     except Exception as e:
-#         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
-    
-
-
 @order_bp.route("/orders_to_invoice", methods=["GET"])
 def orders_to_invoice():
     try:
@@ -972,5 +807,201 @@ def partial_invoice():
         orders = ms_query_db(query, params, fetch_one=False)
         return jsonify(orders), 200
 
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+@order_bp.route("/update_order_discount", methods=["POST"])
+def update_order_discount():
+    try:
+        # silent=True prevents Flask from throwing a hard 400 error if JSON is invalid/empty
+        data = request.get_json(silent=True)
+
+        # Now we can catch the empty/invalid data gracefully
+        if data is None:
+            return jsonify(
+                {
+                    "message": "Invalid or empty JSON payload provided. Please check your request body."
+                }
+            ), 400
+
+        # Extract parameters safely
+        new_discount_amount = data.get("NewDiscountAmount")
+        target_soid = data.get("TargetSOID")
+
+        if new_discount_amount is None or target_soid is None:
+            return jsonify(
+                {
+                    "message": "Missing required parameters: NewDiscountAmount or TargetSOID"
+                }
+            ), 400
+
+
+
+        # Ensure correct data types
+        new_discount_amount = float(new_discount_amount)
+        target_soid = int(target_soid)
+
+        # SQL Query with parameterized DECLARE statements
+        query = """
+        BEGIN TRAN;
+
+        -- =====================================================================
+        -- 1. DECLARE VARIABLES 
+        -- =====================================================================
+        DECLARE @NewDiscountAmount DECIMAL(18, 2) = ?; 
+        DECLARE @TargetSOID INT = ?;
+        DECLARE @GSTMultiplier DECIMAL(18, 4) = 1.18; -- For 18% GST
+
+        -- =====================================================================
+        -- 2. UPDATE PRODUCT DETAILS (Item Level)
+        -- =====================================================================
+        UPDATE TBL_SalesOrderProductDetails
+        SET 
+            DiscountAmount = @NewDiscountAmount,
+            
+            -- Strip commas from Rate, prevent divide-by-zero, and ROUND to 2 decimal places
+            DiscountPerc = CAST((@NewDiscountAmount / NULLIF(TRY_CAST(REPLACE(Rate, ',', '') AS DECIMAL(18, 4)), 0)) * 100 AS DECIMAL(18, 2))
+        WHERE 
+            SOID = @TargetSOID;
+
+        -- =====================================================================
+        -- 3. UPDATE HEADER DETAILS (Order Level)
+        -- =====================================================================
+        UPDATE Header
+        SET 
+            Header.NetTaxableAmount = Calc.NewNetTaxableAmount,
+            Header.NetAmount = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0),
+            Header.RoundOff = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0) - (Calc.NewNetTaxableAmount * @GSTMultiplier)
+        FROM 
+            TBL_SalesOrderDetails Header
+        INNER JOIN (
+            SELECT 
+                SOID,
+                -- 1. Use REPLACE() to remove commas so TRY_CAST doesn't fail
+                -- 2. Use ISNULL() to ensure if a row is completely blank, it counts as 0 instead of NULL
+                SUM(ISNULL(TRY_CAST(REPLACE(LineTotal, ',', '') AS DECIMAL(18, 4)), 0)) - 
+                SUM((ISNULL(TRY_CAST(REPLACE(Qty, ',', '') AS DECIMAL(18, 4)), 0) * @NewDiscountAmount) / @GSTMultiplier) AS NewNetTaxableAmount
+            FROM 
+                TBL_SalesOrderProductDetails
+            WHERE 
+                SOID = @TargetSOID
+            GROUP BY 
+                SOID
+        ) Calc ON Header.SlNo = Calc.SOID;
+
+        COMMIT TRAN;
+        """
+
+        # Pass the extracted variables to the ? placeholders
+        params = (new_discount_amount, target_soid)
+
+        # Run query and commit the transaction
+        ms_query_db(query, args=params, commit=True)
+
+        return jsonify({"message": "Order discount updated successfully"}), 200
+
+    except ValueError:
+        return jsonify(
+            {
+                "message": "Invalid parameter format. Ensure NewDiscountAmount is a number and TargetSOID is an integer."
+            }
+        ), 400
+    except Exception as e:
+        return jsonify(
+            {
+                "message": f"Internal server error: {str(e)}"
+            }
+        ), 500
+    
+
+
+
+
+@order_bp.route("/update_order_discount", methods=["GET"])
+def update_order_discount_get():
+    try:
+        # Extract parameters from the URL query string
+        new_discount_amount = request.args.get("NewDiscountAmount")
+        target_soid = request.args.get("TargetSOID")
+
+        # Catch missing parameters gracefully
+        if new_discount_amount is None or target_soid is None:
+            return jsonify(
+                {
+                    "message": "Missing required query parameters: NewDiscountAmount or TargetSOID. Please pass them in the URL."
+                }
+            ), 400
+
+        # Ensure correct data types (URL parameters are always strings initially)
+        new_discount_amount = float(new_discount_amount)
+        target_soid = int(target_soid)
+
+        # SQL Query with parameterized DECLARE statements
+        query = """
+        BEGIN TRAN;
+
+        -- =====================================================================
+        -- 1. DECLARE VARIABLES 
+        -- =====================================================================
+        DECLARE @NewDiscountAmount DECIMAL(18, 2) = ?; 
+        DECLARE @TargetSOID INT = ?;
+        DECLARE @GSTMultiplier DECIMAL(18, 4) = 1.18; -- For 18% GST
+
+        -- =====================================================================
+        -- 2. UPDATE PRODUCT DETAILS (Item Level)
+        -- =====================================================================
+        UPDATE TBL_SalesOrderProductDetails
+        SET 
+            DiscountAmount = @NewDiscountAmount,
+            
+            -- Strip commas from Rate, prevent divide-by-zero, and ROUND to 2 decimal places
+            DiscountPerc = CAST((@NewDiscountAmount / NULLIF(TRY_CAST(REPLACE(Rate, ',', '') AS DECIMAL(18, 4)), 0)) * 100 AS DECIMAL(18, 2))
+        WHERE 
+            SOID = @TargetSOID;
+
+        -- =====================================================================
+        -- 3. UPDATE HEADER DETAILS (Order Level)
+        -- =====================================================================
+        UPDATE Header
+        SET 
+            Header.NetTaxableAmount = Calc.NewNetTaxableAmount,
+            Header.NetAmount = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0),
+            Header.RoundOff = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0) - (Calc.NewNetTaxableAmount * @GSTMultiplier)
+        FROM 
+            TBL_SalesOrderDetails Header
+        INNER JOIN (
+            SELECT 
+                SOID,
+                -- 1. Use REPLACE() to remove commas so TRY_CAST doesn't fail
+                -- 2. Use ISNULL() to ensure if a row is completely blank, it counts as 0 instead of NULL
+                SUM(ISNULL(TRY_CAST(REPLACE(LineTotal, ',', '') AS DECIMAL(18, 4)), 0)) - 
+                SUM((ISNULL(TRY_CAST(REPLACE(Qty, ',', '') AS DECIMAL(18, 4)), 0) * @NewDiscountAmount) / @GSTMultiplier) AS NewNetTaxableAmount
+            FROM 
+                TBL_SalesOrderProductDetails
+            WHERE 
+                SOID = @TargetSOID
+            GROUP BY 
+                SOID
+        ) Calc ON Header.SlNo = Calc.SOID;
+
+        COMMIT TRAN;
+        """
+
+        # Pass the extracted variables to the ? placeholders
+        params = (new_discount_amount, target_soid)
+
+        # Run query and commit the transaction
+        ms_query_db(query, args=params, commit=True)
+
+        return jsonify({"message": "Order discount updated successfully"}), 200
+
+    except ValueError:
+        # This catches errors if the user passes text instead of numbers (e.g., TargetSOID=abc)
+        return jsonify(
+            {
+                "message": "Invalid parameter format. Ensure NewDiscountAmount is a number and TargetSOID is an integer."
+            }
+        ), 400
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
