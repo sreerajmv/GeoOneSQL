@@ -1,4 +1,13 @@
-from flask import Flask, jsonify, request, render_template, session, redirect, url_for
+from flask import (
+    Flask,
+    jsonify,
+    request,
+    render_template,
+    session,
+    redirect,
+    url_for,
+    abort,
+)
 from routes import register_blueprints
 from flask_cors import CORS  # type: ignore
 from setting.db_connections import ms_query_db
@@ -6,11 +15,14 @@ import os
 
 app = Flask(__name__)
 
-# 1. ADDED: Required for Flask sessions to work safely
 app.secret_key = "super_secret_development_key"
 
 VALID_USERNAME = "admin"
-VALID_PASSWORD = "George@1098"
+VALID_PASSWORD = "secure123"
+
+# Define the list of allowed IP addresses here.
+# 127.0.0.1 allows you to test it locally.
+ALLOWED_IPS = ["127.0.0.1", "192.168.1.100", "10.10.0.123"]
 
 CORS(app)
 register_blueprints(app)
@@ -26,7 +38,6 @@ def index():
 def login():
     message = None
 
-    # 2. FIXED: Removed 'order_bp.' from url_for
     if session.get("logged_in"):
         return redirect(url_for("update_order_discount"))
 
@@ -47,14 +58,29 @@ def login():
 @app.route("/logout")
 def logout():
     session.pop("logged_in", None)
-    # 3. FIXED: Removed 'order_bp.' from url_for
     return redirect(url_for("login"))
 
 
 # --- 3. SECURE DISCOUNT ROUTE ---
 @app.route("/update_order_discount", methods=["GET", "POST"])
 def update_order_discount():
-    # 4. FIXED: Removed 'order_bp.' from url_for
+    # ---------------------------------------------------------
+    # 1. IP WHITELIST CHECK
+    # ---------------------------------------------------------
+    # Get the IP address of the user making the request
+    client_ip = request.remote_addr
+
+    # If the IP is not in our list, instantly reject the request
+    if client_ip not in ALLOWED_IPS:
+        # abort(403) throws a standard "Forbidden" HTTP error page
+        abort(
+            403,
+            description="Access Denied: Your IP address is not authorized to view this page.",
+        )
+
+    # ---------------------------------------------------------
+    # 2. SESSION AUTHENTICATION CHECK
+    # ---------------------------------------------------------
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
