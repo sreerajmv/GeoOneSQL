@@ -22,7 +22,7 @@ VALID_PASSWORD = "secure123"
 
 # Define the list of allowed IP addresses here.
 # 127.0.0.1 allows you to test it locally.
-ALLOWED_IPS = ["127.0.0.1", "10.10.0.204", "10.10.0.123"]
+ALLOWED_IPS = ["127.0.0.1", "10.10.0.204", "10.10.0.218", "10.10.0.231", "10.10.0.123"]
 
 CORS(app)
 register_blueprints(app)
