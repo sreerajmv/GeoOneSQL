@@ -1,4 +1,4 @@
-$source = ".\routes"
+$source = ".\templates"
 $destinationServer = "gipl@192.168.168.222"
 $destinationPath = "/home/gipl/geooneMS"
 $destination = "${destinationServer}:${destinationPath}"

@@ -11,7 +11,7 @@ from flask import (
 from routes import register_blueprints
 from flask_cors import CORS  # type: ignore
 from setting.db_connections import ms_query_db
-import os
+# import os
 
 app = Flask(__name__)
 
@@ -22,7 +22,7 @@ VALID_PASSWORD = "secure123"
 
 # Define the list of allowed IP addresses here.
 # 127.0.0.1 allows you to test it locally.
-ALLOWED_IPS = ["127.0.0.1", "192.168.1.100", "10.10.0.123"]
+ALLOWED_IPS = ["127.0.0.1", "10.10.0.204", "10.10.0.123"]
 
 CORS(app)
 register_blueprints(app)
@@ -62,7 +62,7 @@ def logout():
 
 
 # --- 3. SECURE DISCOUNT ROUTE ---
-@app.route("/update_order_discount", methods=["GET", "POST"])
+@app.route("/test", methods=["GET", "POST"])
 def update_order_discount():
     # ---------------------------------------------------------
     # 1. IP WHITELIST CHECK
