@@ -1005,3 +1005,98 @@ def update_order_discount_get():
         ), 400
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+
+# Assuming order_bp and ms_query_db are defined elsewhere in your app
+
+
+# @order_bp.route("/update_order_discount", methods=["GET", "POST"])
+# def update_order_discount():
+#     message = None
+#     message_category = None  # Can be 'success' or 'danger' (for error styling)
+
+#     if request.method == "POST":
+#         try:
+#             # Extract parameters from the form submission (POST) instead of URL
+#             new_discount_amount = request.form.get("NewDiscountAmount")
+#             target_soid = request.form.get("TargetSOID")
+
+#             # Catch missing parameters
+#             if not new_discount_amount or not target_soid:
+#                 message = "Missing required fields: New Discount Amount or Target SOID."
+#                 message_category = "danger"
+#             else:
+#                 # Ensure correct data types
+#                 new_discount_amount = float(new_discount_amount)
+#                 target_soid = int(target_soid)
+
+#                 # SQL Query with parameterized DECLARE statements
+#                 query = """
+#                 BEGIN TRAN;
+
+#                 -- =====================================================================
+#                 -- 1. DECLARE VARIABLES 
+#                 -- =====================================================================
+#                 DECLARE @NewDiscountAmount DECIMAL(18, 2) = ?; 
+#                 DECLARE @TargetSOID INT = ?;
+#                 DECLARE @GSTMultiplier DECIMAL(18, 4) = 1.18; -- For 18% GST
+
+#                 -- =====================================================================
+#                 -- 2. UPDATE PRODUCT DETAILS (Item Level)
+#                 -- =====================================================================
+#                 UPDATE TBL_SalesOrderProductDetails
+#                 SET 
+#                     DiscountAmount = @NewDiscountAmount,
+                    
+#                     -- Strip commas from Rate, prevent divide-by-zero, and ROUND to 2 decimal places
+#                     DiscountPerc = CAST((@NewDiscountAmount / NULLIF(TRY_CAST(REPLACE(Rate, ',', '') AS DECIMAL(18, 4)), 0)) * 100 AS DECIMAL(18, 2))
+#                 WHERE 
+#                     SOID = @TargetSOID;
+
+#                 -- =====================================================================
+#                 -- 3. UPDATE HEADER DETAILS (Order Level)
+#                 -- =====================================================================
+#                 UPDATE Header
+#                 SET 
+#                     Header.NetTaxableAmount = Calc.NewNetTaxableAmount,
+#                     Header.NetAmount = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0),
+#                     Header.RoundOff = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0) - (Calc.NewNetTaxableAmount * @GSTMultiplier)
+#                 FROM 
+#                     TBL_SalesOrderDetails Header
+#                 INNER JOIN (
+#                     SELECT 
+#                         SOID,
+#                         SUM(ISNULL(TRY_CAST(REPLACE(LineTotal, ',', '') AS DECIMAL(18, 4)), 0)) - 
+#                         SUM((ISNULL(TRY_CAST(REPLACE(Qty, ',', '') AS DECIMAL(18, 4)), 0) * @NewDiscountAmount) / @GSTMultiplier) AS NewNetTaxableAmount
+#                     FROM 
+#                         TBL_SalesOrderProductDetails
+#                     WHERE 
+#                         SOID = @TargetSOID
+#                     GROUP BY 
+#                         SOID
+#                 ) Calc ON Header.SlNo = Calc.SOID;
+
+#                 COMMIT TRAN;
+#                 """
+
+#                 # Pass the extracted variables to the ? placeholders
+#                 params = (new_discount_amount, target_soid)
+
+#                 # Run query and commit the transaction
+#                 ms_query_db(query, args=params, commit=True)
+
+#                 message = f"Order discount for SOID {target_soid} updated successfully!"
+#                 message_category = "success"
+
+#         except ValueError:
+#             message = "Invalid input format. Ensure New Discount Amount is a number and Target SOID is an integer."
+#             message_category = "danger"
+#         except Exception as e:
+#             message = f"Internal server error: {str(e)}"
+#             message_category = "danger"
+
+#     # Render the HTML page for both GET (initial load) and POST (after submission)
+#     return render_template(
+#         "update_discount.html", message=message, message_category=message_category
+#     )
