@@ -34,117 +34,117 @@ def index():
 
 
 # --- 1. LOGIN ROUTE ---
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    message = None
+# @app.route("/login", methods=["GET", "POST"])
+# def login():
+#     message = None
 
-    if session.get("logged_in"):
-        return redirect(url_for("update_order_discount"))
+#     if session.get("logged_in"):
+#         return redirect(url_for("update_order_discount"))
 
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+#     if request.method == "POST":
+#         username = request.form.get("username")
+#         password = request.form.get("password")
 
-        if username == VALID_USERNAME and password == VALID_PASSWORD:
-            session["logged_in"] = True
-            return redirect(url_for("update_order_discount"))
-        else:
-            message = "Invalid username or password."
+#         if username == VALID_USERNAME and password == VALID_PASSWORD:
+#             session["logged_in"] = True
+#             return redirect(url_for("update_order_discount"))
+#         else:
+#             message = "Invalid username or password."
 
-    return render_template("login.html", message=message)
-
-
-# --- 2. LOGOUT ROUTE ---
-@app.route("/logout")
-def logout():
-    session.pop("logged_in", None)
-    return redirect(url_for("login"))
+#     return render_template("login.html", message=message)
 
 
-# --- 3. SECURE DISCOUNT ROUTE ---
-@app.route("/test", methods=["GET", "POST"])
-def update_order_discount():
-    # ---------------------------------------------------------
-    # 1. IP WHITELIST CHECK
-    # ---------------------------------------------------------
-    # Get the IP address of the user making the request
-    client_ip = request.remote_addr
+# # --- 2. LOGOUT ROUTE ---
+# @app.route("/logout")
+# def logout():
+#     session.pop("logged_in", None)
+#     return redirect(url_for("login"))
 
-    # If the IP is not in our list, instantly reject the request
-    if client_ip not in ALLOWED_IPS:
-        # abort(403) throws a standard "Forbidden" HTTP error page
-        abort(
-            403,
-            description="Access Denied: Your IP address is not authorized to view this page.",
-        )
 
-    # ---------------------------------------------------------
-    # 2. SESSION AUTHENTICATION CHECK
-    # ---------------------------------------------------------
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
+# # --- 3. SECURE DISCOUNT ROUTE ---
+# @app.route("/test", methods=["GET", "POST"])
+# def update_order_discount():
+#     # ---------------------------------------------------------
+#     # 1. IP WHITELIST CHECK
+#     # ---------------------------------------------------------
+#     # Get the IP address of the user making the request
+#     client_ip = request.remote_addr
 
-    message = None
-    message_category = None
+#     # If the IP is not in our list, instantly reject the request
+#     if client_ip not in ALLOWED_IPS:
+#         # abort(403) throws a standard "Forbidden" HTTP error page
+#         abort(
+#             403,
+#             description="Access Denied: Your IP address is not authorized to view this page.",
+#         )
 
-    if request.method == "POST":
-        try:
-            new_discount_amount = request.form.get("NewDiscountAmount")
-            target_soid = request.form.get("TargetSOID")
+#     # ---------------------------------------------------------
+#     # 2. SESSION AUTHENTICATION CHECK
+#     # ---------------------------------------------------------
+#     if not session.get("logged_in"):
+#         return redirect(url_for("login"))
 
-            if not new_discount_amount or not target_soid:
-                message = "Missing required fields."
-                message_category = "danger"
-            else:
-                new_discount_amount = float(new_discount_amount)
-                target_soid = int(target_soid)
+#     message = None
+#     message_category = None
 
-                query = """
-                BEGIN TRAN;
-                DECLARE @NewDiscountAmount DECIMAL(18, 2) = ?; 
-                DECLARE @TargetSOID INT = ?;
-                DECLARE @GSTMultiplier DECIMAL(18, 4) = 1.18;
+#     if request.method == "POST":
+#         try:
+#             new_discount_amount = request.form.get("NewDiscountAmount")
+#             target_soid = request.form.get("TargetSOID")
 
-                UPDATE TBL_SalesOrderProductDetails
-                SET 
-                    DiscountAmount = @NewDiscountAmount,
-                    DiscountPerc = CAST((@NewDiscountAmount / NULLIF(TRY_CAST(REPLACE(Rate, ',', '') AS DECIMAL(18, 4)), 0)) * 100 AS DECIMAL(18, 2))
-                WHERE SOID = @TargetSOID;
+#             if not new_discount_amount or not target_soid:
+#                 message = "Missing required fields."
+#                 message_category = "danger"
+#             else:
+#                 new_discount_amount = float(new_discount_amount)
+#                 target_soid = int(target_soid)
 
-                UPDATE Header
-                SET 
-                    Header.NetTaxableAmount = Calc.NewNetTaxableAmount,
-                    Header.NetAmount = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0),
-                    Header.RoundOff = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0) - (Calc.NewNetTaxableAmount * @GSTMultiplier)
-                FROM TBL_SalesOrderDetails Header
-                INNER JOIN (
-                    SELECT SOID,
-                        SUM(ISNULL(TRY_CAST(REPLACE(LineTotal, ',', '') AS DECIMAL(18, 4)), 0)) - 
-                        SUM((ISNULL(TRY_CAST(REPLACE(Qty, ',', '') AS DECIMAL(18, 4)), 0) * @NewDiscountAmount) / @GSTMultiplier) AS NewNetTaxableAmount
-                    FROM TBL_SalesOrderProductDetails
-                    WHERE SOID = @TargetSOID
-                    GROUP BY SOID
-                ) Calc ON Header.SlNo = Calc.SOID;
+#                 query = """
+#                 BEGIN TRAN;
+#                 DECLARE @NewDiscountAmount DECIMAL(18, 2) = ?; 
+#                 DECLARE @TargetSOID INT = ?;
+#                 DECLARE @GSTMultiplier DECIMAL(18, 4) = 1.18;
 
-                COMMIT TRAN;
-                """
+#                 UPDATE TBL_SalesOrderProductDetails
+#                 SET 
+#                     DiscountAmount = @NewDiscountAmount,
+#                     DiscountPerc = CAST((@NewDiscountAmount / NULLIF(TRY_CAST(REPLACE(Rate, ',', '') AS DECIMAL(18, 4)), 0)) * 100 AS DECIMAL(18, 2))
+#                 WHERE SOID = @TargetSOID;
 
-                params = (new_discount_amount, target_soid)
-                ms_query_db(query, args=params, commit=True)
+#                 UPDATE Header
+#                 SET 
+#                     Header.NetTaxableAmount = Calc.NewNetTaxableAmount,
+#                     Header.NetAmount = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0),
+#                     Header.RoundOff = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0) - (Calc.NewNetTaxableAmount * @GSTMultiplier)
+#                 FROM TBL_SalesOrderDetails Header
+#                 INNER JOIN (
+#                     SELECT SOID,
+#                         SUM(ISNULL(TRY_CAST(REPLACE(LineTotal, ',', '') AS DECIMAL(18, 4)), 0)) - 
+#                         SUM((ISNULL(TRY_CAST(REPLACE(Qty, ',', '') AS DECIMAL(18, 4)), 0) * @NewDiscountAmount) / @GSTMultiplier) AS NewNetTaxableAmount
+#                     FROM TBL_SalesOrderProductDetails
+#                     WHERE SOID = @TargetSOID
+#                     GROUP BY SOID
+#                 ) Calc ON Header.SlNo = Calc.SOID;
 
-                message = f"Order discount for SOID {target_soid} updated successfully!"
-                message_category = "success"
+#                 COMMIT TRAN;
+#                 """
 
-        except ValueError:
-            message = "Invalid input format."
-            message_category = "danger"
-        except Exception as e:
-            message = f"Internal server error: {str(e)}"
-            message_category = "danger"
+#                 params = (new_discount_amount, target_soid)
+#                 ms_query_db(query, args=params, commit=True)
 
-    return render_template(
-        "update_discount.html", message=message, message_category=message_category
-    )
+#                 message = f"Order discount for SOID {target_soid} updated successfully!"
+#                 message_category = "success"
+
+#         except ValueError:
+#             message = "Invalid input format."
+#             message_category = "danger"
+#         except Exception as e:
+#             message = f"Internal server error: {str(e)}"
+#             message_category = "danger"
+
+#     return render_template(
+#         "update_discount.html", message=message, message_category=message_category
+#     )
 
 
 if __name__ == "__main__":
