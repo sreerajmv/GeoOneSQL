@@ -94,7 +94,71 @@ def get_order():
     
 
 
-    
+
+
+
+@order_bp.route("/orderid", methods=["GET"])
+def get_order_so():
+    try:
+        order_id = request.args.get("order_id")
+
+        # SQL query to fetch order details
+        query = """
+            SELECT  
+                A.SlNo,
+                A.OrderType,
+                A.CustCode,
+				A.NetTaxableAmount,
+				A.RoundOff,
+                A.NetAmount,
+                A.MakingTime,
+                C.Location AS LocationName,
+                B.CardName AS CustomerName,
+				A.status,
+                (
+                    SELECT 
+                        D.SlNo as lineid,
+                        D.ProdName,
+                        D.Qty,
+                        D.Rate,
+                        D.DiscountPerc,
+						D.DiscountAmount,
+                        D.LineTotal
+                    FROM 
+                        TBL_SalesOrderProductDetails AS D
+                    WHERE 
+                        D.SOID = A.SlNo
+                    FOR JSON PATH
+                ) AS Products
+            FROM 
+                TBL_SalesOrderDetails AS A
+            LEFT JOIN CustomerMaster_M_Tbl AS B ON A.CustCode = B.CardCode
+            LEFT JOIN LocationMaster_M_Tbl AS C ON A.LocationID = C.LocationId
+            WHERE 
+                 A.MakerId = 38 AND  A.SlNo = ?
+            FOR JSON PATH, INCLUDE_NULL_VALUES;
+        """
+        params = (order_id)
+        # Execute the query and fetch the result
+        orderdetails = ms_query_db(query, params)
+        # Process the result
+        if orderdetails:
+            json_key = "JSON_F52E2B61-18A1-11d1-B105-00805F49916B"
+            raw_data = json.loads(orderdetails[0].get(json_key, "[]"))
+            formatted_data = (
+                raw_data[0] if isinstance(raw_data, list) and raw_data else {}
+            )
+        else:
+            formatted_data = {}
+        # check formatted_data is empty or not
+        if not formatted_data:
+            return jsonify({"message": "No data found."}), 404
+        return jsonify(formatted_data), 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"message": "Internal server error."}), 500
+
+
 @order_bp.route("/orderApprove", methods=["POST"])
 def approve_order():
     try:
@@ -1008,95 +1072,111 @@ def update_order_discount_get():
 
 
 
-# Assuming order_bp and ms_query_db are defined elsewhere in your app
+@order_bp.route("/update_multiple_order_discounts", methods=["POST"])
+def update_multiple_order_discounts_post():
+    try:
+        # Extract the JSON payload from the request body
+        data = request.get_json()
 
+        # Catch missing or completely invalid payloads
+        if not data:
+            return jsonify({"message": "Missing JSON payload in request body."}), 400
 
-# @order_bp.route("/update_order_discount", methods=["GET", "POST"])
-# def update_order_discount():
-#     message = None
-#     message_category = None  # Can be 'success' or 'danger' (for error styling)
+        target_soid = data.get("TargetSOID")
+        items = data.get("Items")
 
-#     if request.method == "POST":
-#         try:
-#             # Extract parameters from the form submission (POST) instead of URL
-#             new_discount_amount = request.form.get("NewDiscountAmount")
-#             target_soid = request.form.get("TargetSOID")
+        # Validate that both required fields exist and 'items' is actually a list
+        if target_soid is None or not items or not isinstance(items, list):
+            return jsonify(
+                {
+                    "message": "Invalid payload structure. Required format: {'TargetSOID': 123, 'Items': [{'product_slno': 1, 'new_discount_amount': 5.0}]}"
+                }
+            ), 400
 
-#             # Catch missing parameters
-#             if not new_discount_amount or not target_soid:
-#                 message = "Missing required fields: New Discount Amount or Target SOID."
-#                 message_category = "danger"
-#             else:
-#                 # Ensure correct data types
-#                 new_discount_amount = float(new_discount_amount)
-#                 target_soid = int(target_soid)
+        # Ensure correct data type for the SOID
+        target_soid = int(target_soid)
 
-#                 # SQL Query with parameterized DECLARE statements
-#                 query = """
-#                 BEGIN TRAN;
+        # Convert the Python list of items into a JSON string so SQL Server can read it
+        json_payload = json.dumps(items)
 
-#                 -- =====================================================================
-#                 -- 1. DECLARE VARIABLES 
-#                 -- =====================================================================
-#                 DECLARE @NewDiscountAmount DECIMAL(18, 2) = ?; 
-#                 DECLARE @TargetSOID INT = ?;
-#                 DECLARE @GSTMultiplier DECIMAL(18, 4) = 1.18; -- For 18% GST
+        # SQL Query utilizing OPENJSON to map the array directly to the table
+        query = """
+        BEGIN TRAN;
+        BEGIN TRY
+            -- =====================================================================
+            -- 1. DECLARE VARIABLES 
+            -- =====================================================================
+            DECLARE @TargetSOID INT = ?;
+            DECLARE @JsonPayload NVARCHAR(MAX) = ?;
+            DECLARE @GSTMultiplier DECIMAL(18, 4) = 1.18; -- For 18% GST
 
-#                 -- =====================================================================
-#                 -- 2. UPDATE PRODUCT DETAILS (Item Level)
-#                 -- =====================================================================
-#                 UPDATE TBL_SalesOrderProductDetails
-#                 SET 
-#                     DiscountAmount = @NewDiscountAmount,
-                    
-#                     -- Strip commas from Rate, prevent divide-by-zero, and ROUND to 2 decimal places
-#                     DiscountPerc = CAST((@NewDiscountAmount / NULLIF(TRY_CAST(REPLACE(Rate, ',', '') AS DECIMAL(18, 4)), 0)) * 100 AS DECIMAL(18, 2))
-#                 WHERE 
-#                     SOID = @TargetSOID;
+            -- =====================================================================
+            -- 2. UPDATE PRODUCT DETAILS (Item Level)
+            -- =====================================================================
+            UPDATE P
+            SET 
+                P.DiscountAmount = D.new_discount_amount,
+                
+                -- Strip commas from Rate, prevent divide-by-zero, and format to 2 decimal places
+                P.DiscountPerc = CAST((D.new_discount_amount / NULLIF(TRY_CAST(REPLACE(P.Rate, ',', '') AS DECIMAL(18, 4)), 0)) * 100 AS DECIMAL(18, 2))
+            FROM 
+                TBL_SalesOrderProductDetails P
+            INNER JOIN 
+                OPENJSON(@JsonPayload) WITH (
+                    product_slno INT '$.product_slno',
+                    new_discount_amount DECIMAL(18, 2) '$.new_discount_amount'
+                ) D ON P.SlNo = D.product_slno
+            WHERE 
+                P.SOID = @TargetSOID;
 
-#                 -- =====================================================================
-#                 -- 3. UPDATE HEADER DETAILS (Order Level)
-#                 -- =====================================================================
-#                 UPDATE Header
-#                 SET 
-#                     Header.NetTaxableAmount = Calc.NewNetTaxableAmount,
-#                     Header.NetAmount = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0),
-#                     Header.RoundOff = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0) - (Calc.NewNetTaxableAmount * @GSTMultiplier)
-#                 FROM 
-#                     TBL_SalesOrderDetails Header
-#                 INNER JOIN (
-#                     SELECT 
-#                         SOID,
-#                         SUM(ISNULL(TRY_CAST(REPLACE(LineTotal, ',', '') AS DECIMAL(18, 4)), 0)) - 
-#                         SUM((ISNULL(TRY_CAST(REPLACE(Qty, ',', '') AS DECIMAL(18, 4)), 0) * @NewDiscountAmount) / @GSTMultiplier) AS NewNetTaxableAmount
-#                     FROM 
-#                         TBL_SalesOrderProductDetails
-#                     WHERE 
-#                         SOID = @TargetSOID
-#                     GROUP BY 
-#                         SOID
-#                 ) Calc ON Header.SlNo = Calc.SOID;
+            -- =====================================================================
+            -- 3. UPDATE HEADER DETAILS (Order Level)
+            -- =====================================================================
+            UPDATE Header
+            SET 
+                Header.NetTaxableAmount = Calc.NewNetTaxableAmount,
+                Header.NetAmount = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0),
+                Header.RoundOff = ROUND(Calc.NewNetTaxableAmount * @GSTMultiplier, 0) - (Calc.NewNetTaxableAmount * @GSTMultiplier)
+            FROM 
+                TBL_SalesOrderDetails Header
+            INNER JOIN (
+                SELECT 
+                    SOID,
+                    -- Use ISNULL and TRY_CAST to safely sum up the entire order
+                    SUM(ISNULL(TRY_CAST(REPLACE(LineTotal, ',', '') AS DECIMAL(18, 4)), 0)) - 
+                    SUM((ISNULL(TRY_CAST(REPLACE(Qty, ',', '') AS DECIMAL(18, 4)), 0) * ISNULL(TRY_CAST(DiscountAmount AS DECIMAL(18,4)), 0)) / @GSTMultiplier) AS NewNetTaxableAmount
+                FROM 
+                    TBL_SalesOrderProductDetails
+                WHERE 
+                    SOID = @TargetSOID
+                GROUP BY 
+                    SOID
+            ) Calc ON Header.SlNo = Calc.SOID;
 
-#                 COMMIT TRAN;
-#                 """
+            COMMIT TRAN;
+        END TRY
+        BEGIN CATCH
+            -- If any math error or constraint fails, rollback everything safely
+            ROLLBACK TRAN;
+            THROW;
+        END CATCH
+        """
 
-#                 # Pass the extracted variables to the ? placeholders
-#                 params = (new_discount_amount, target_soid)
+        # Pass the extracted variables to the ? placeholders in the exact order they appear
+        params = (target_soid, json_payload)
 
-#                 # Run query and commit the transaction
-#                 ms_query_db(query, args=params, commit=True)
+        # Run query and commit the transaction
+        ms_query_db(query, args=params, commit=True)
 
-#                 message = f"Order discount for SOID {target_soid} updated successfully!"
-#                 message_category = "success"
+        return jsonify(
+            {"message": f"Order discounts updated successfully for SOID {target_soid}"}
+        ), 200
 
-#         except ValueError:
-#             message = "Invalid input format. Ensure New Discount Amount is a number and Target SOID is an integer."
-#             message_category = "danger"
-#         except Exception as e:
-#             message = f"Internal server error: {str(e)}"
-#             message_category = "danger"
-
-#     # Render the HTML page for both GET (initial load) and POST (after submission)
-#     return render_template(
-#         "update_discount.html", message=message, message_category=message_category
-#     )
+    except ValueError:
+        return jsonify(
+            {
+                "message": "Invalid parameter format. Ensure TargetSOID is an integer and discount amounts are numbers."
+            }
+        ), 400
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
