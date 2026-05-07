@@ -379,3 +379,108 @@ def draft_orders_summary(employee_id = None):
         return jsonify(draft_orders), 200
     except Exception as e:
         return jsonify({"message": f"Internal server error: {str(e)}"}), 500
+
+
+@ms_reports_bp.route("/draft_orders_test/<int:employee_id>", methods=["GET"])
+def draft_orders_test(employee_id=None):
+    try:
+        # sales_person = request.args.get("sales_person")
+        status = request.args.get("status")
+        created_date = request.args.get("created_date")
+        territory_id = request.args.get("territory_id")
+        approved_date = request.args.get("approved_date")
+        associated = request.args.get("associated")
+        cardcode = request.args.get("cardcode")
+        query = """
+                    SELECT 
+                        B.SlNo [Order_No],
+                        CASE WHEN B.OrderType='WO' THEN 'WorkOrder'
+                        WHEN B.OrderType='SO' THEN 'SalesOrder' 
+                        ELSE '' END AS OrderType,
+                        B.MakingTime,
+                        B.CustCode AS CustomerCode,
+                        E.CardName,
+                        U.Name,
+                        C.Description [itemName],
+                        F.Location,
+                        C.MainGroup,
+						TR.descript Territory,
+                        CAST(ISNULL(CASE WHEN D.UomCode ='SQM' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                            WHEN D.UomCode ='KGS' THEN TRY_CAST(A.Qty AS NUMERIC(10,2))/1000
+                            WHEN D.UomCode ='MTR' THEN TRY_CAST((A.Qty*TRY_CAST(C.Width AS NUMERIC(10,2))) * TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                            WHEN D.UomCode ='NOS' THEN TRY_CAST(A.Qty*TRY_CAST(C.altuntcom1 AS NUMERIC(10,2)) AS DECIMAL(18,2))/1000
+                            ELSE 0 END ,0) AS NUMERIC(10,2))  AS [Tonnage],
+                        CASE WHEN B.Status = 'C' THEN 'Cancelled'
+                        WHEN B.Status = 'Y' THEN 'Posted to SAP'
+                        WHEN B.Status = 'E'  THEN 'Expired'
+                        WHEN B.Status = 'N' THEN 'Draft'
+                        WHEN B.Status = 'R' THEN 'Dealer Confirmed'
+                        WHEN B.Status = 'P' then 'Dealer Draft'
+                        END AS [Status]
+                    FROM 
+                        TBL_SalesOrderProductDetails A
+                        INNER JOIN TBL_SalesOrderDetails B ON A.SOID = B.SlNo
+                        INNER JOIN ItemMaster_M_Tbl C ON C.ItemCode = A.ProductCode  AND C.MainGroup IN ('Geoclad Cladding Sheet', 'Georoof Roofing Sheet', 'Georoof Roofing Accessories')
+                        INNER JOIN Uom_Master_M_Tbl D ON D.UomId = C.UOM
+                        INNER JOIN CustomerMaster_M_Tbl E ON E.CardCode = B.CustCode AND  E.Territory <> '42'
+                        INNER JOIN LocationMaster_M_Tbl F ON F.Code = B.LocationID
+                        INNER JOIN TBL_Users U ON U.UserID=A.MakerID
+                        INNER JOIN SalesEmployeeMaster_M_Tbl SE ON B.SalesPerson=SE.SalesEmployeeCode
+                        INNER JOIN Employee_Master_M_Tbl EM ON EM.SapEmployeeId=SE.EmployeeId
+						INNER JOIN Territory_M_Tbl TR ON TR.TerritryID = E.Territory
+
+                """
+        conditions = []
+        params = []
+
+        conditions.append("B.Status != 'C'")
+
+        if associated in ("AMNS", "Georoof"):
+            conditions.append("SE.U_Associated = ?")
+            params.append(associated)
+
+        if cardcode:
+            conditions.append("B.CustCode = ?")
+            params.append(cardcode)
+
+        if employee_id:
+            territories = fetch_employee_territory(
+                employee_id
+            )  # assume this returns a list
+            if territories:  # avoid empty IN ()
+                conditions.append(
+                    f"E.Territory IN ({','.join(['?'] * len(territories))})"
+                )
+                params.extend(territories)  # <-- extend instead of append
+
+        if status:
+            if status == "open":
+                conditions.append("B.Status IN (?, ?, ?)")
+                params.extend(["N", "R", "P"])
+            elif status == "cancelled":
+                conditions.append("B.Status = ?")
+                params.append("C")
+
+            else:
+                conditions.append("B.Status = ?")
+                params.append(status)
+
+        if created_date:
+            conditions.append("CONVERT(date, B.MakingTime,103) = ?")
+            params.append(created_date)
+
+        if territory_id:
+            conditions.append("E.Territory = ?")
+            params.append(territory_id)
+
+        if approved_date:
+            conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
+            params.append(approved_date)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        draft_orders = ms_query_db(query, params, fetch_one=False)
+        return jsonify(draft_orders), 200
+    except Exception as e:
+        return jsonify({"message": f"Internal server error: {str(e)}"}), 500
