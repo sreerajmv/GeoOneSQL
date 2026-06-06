@@ -135,9 +135,11 @@ def get_order_so():
             LEFT JOIN CustomerMaster_M_Tbl AS B ON A.CustCode = B.CardCode
             LEFT JOIN LocationMaster_M_Tbl AS C ON A.LocationID = C.LocationId
             WHERE 
-                 A.MakerId = 38 AND  A.SlNo = ?
+                 A.MakerId in (38,41) AND  A.SlNo = ? 
             FOR JSON PATH, INCLUDE_NULL_VALUES;
         """
+
+        # change user in  A.MakerId in (38,41)
         params = (order_id)
         # Execute the query and fetch the result
         orderdetails = ms_query_db(query, params)
