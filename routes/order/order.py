@@ -135,7 +135,7 @@ def get_order_so():
             LEFT JOIN CustomerMaster_M_Tbl AS B ON A.CustCode = B.CardCode
             LEFT JOIN LocationMaster_M_Tbl AS C ON A.LocationID = C.LocationId
             WHERE 
-                 A.MakerId in (38,41) AND  A.SlNo = ? 
+                 A.MakerId in (38) AND  A.SlNo = ? 
             FOR JSON PATH, INCLUDE_NULL_VALUES;
         """
 
@@ -487,6 +487,8 @@ def draft_orders(user_id):
         # Cust = CustomerMaster_M_Tbl
         # Emp = Employee_Master_M_Tbl
 
+        print("test")
+
         query = """
             SELECT 
                 Ord.SlNo [Order_No],
@@ -577,6 +579,9 @@ def draft_orders(user_id):
         # Build Final Query
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
+
+
+        
 
         # Execute
         draft_orders = ms_query_db(query, params, fetch_one=False)

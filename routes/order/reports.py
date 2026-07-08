@@ -71,7 +71,7 @@ def get_approved_orders(employee_id = None):
             conditions.append("convert(date, S.DocDate, 103)= ?")
             params.append(created_date)
 
-        if associated in ("AMNS", "Georoof"):
+        if associated in ("2", "1"):
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
 
@@ -155,7 +155,7 @@ def approved_open_orders_summary(employee_id = None):
             conditions.append("convert(date, S.DocDate, 103)= ?")
             params.append(created_date)
 
-        if associated in ("AMNS", "Georoof"):
+        if associated in ("2", "1"):
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
 
@@ -233,7 +233,7 @@ def draft_orders(employee_id = None):
 
         conditions.append("B.Status != 'C'")
 
-        if associated in ("AMNS", "Georoof"):
+        if associated in ("2", "1"):
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
 
@@ -280,6 +280,9 @@ def draft_orders(employee_id = None):
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
+
+        print("Query:", query)
+        print("Params:", params)
 
         draft_orders = ms_query_db(query, params, fetch_one=False)
         return jsonify(draft_orders), 200
@@ -364,7 +367,7 @@ def draft_orders_summary(employee_id = None):
             conditions.append("CONVERT(date, B.ApproveCancelOn,103) = ?")
             params.append(approved_date)
 
-        if associated in ("AMNS", "Georoof"):
+        if associated in ("2", "1"):
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
 
@@ -435,7 +438,7 @@ def draft_orders_test(employee_id=None):
 
         conditions.append("B.Status != 'C'")
 
-        if associated in ("AMNS", "Georoof"):
+        if associated in ("2", "1"):
             conditions.append("SE.U_Associated = ?")
             params.append(associated)
 
