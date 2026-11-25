@@ -135,7 +135,7 @@ def get_order_so():
             LEFT JOIN CustomerMaster_M_Tbl AS B ON A.CustCode = B.CardCode
             LEFT JOIN LocationMaster_M_Tbl AS C ON A.LocationID = C.LocationId
             WHERE 
-                 A.MakerId in (38) AND  A.SlNo = ? 
+                 A.MakerId in (38, 41) AND  A.SlNo = ? 
             FOR JSON PATH, INCLUDE_NULL_VALUES;
         """
 
@@ -479,15 +479,8 @@ def draft_orders(user_id):
         territory_id = request.args.get("territory_id")
         approved_date = request.args.get("approved_date")
 
-        # Fixed Aliases:
-        # Ord = TBL_SalesOrderDetails
-        # Prod = TBL_SalesOrderProductDetails
-        # Itm = ItemMaster_M_Tbl
-        # Uom = Uom_Master_M_Tbl
-        # Cust = CustomerMaster_M_Tbl
-        # Emp = Employee_Master_M_Tbl
 
-        print("test")
+        # print("test")
 
         query = """
             SELECT 
